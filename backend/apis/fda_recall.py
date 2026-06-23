@@ -66,7 +66,9 @@ async def fetch_recall_evidence(generic_name: str) -> RecallEvidence:
     """
     Fetch recall evidence for a drug by generic name.
 
-    Searches the OpenFDA drug enforcement endpoint by product description.
+    Searches the OpenFDA drug enforcement endpoint by product_description.
+    Recalls are returned sorted newest-first by recall_initiation_date;
+    records with unparseable dates are placed at the end.
 
     Contracts:
       - Success          -> returns RecallEvidence (recalls list may be empty)
@@ -74,8 +76,9 @@ async def fetch_recall_evidence(generic_name: str) -> RecallEvidence:
       - Service failure  -> raises FDARecallServiceError
 
     Note: Zero recalls is valid information, not an error condition.
-    OpenFDA returns HTTP 404 when no enforcement records match — this is
-    treated as an empty result, not a service failure.
+    OpenFDA recall searches return HTTP 404 when no recall records match
+    the query. This is treated as a successful retrieval with zero recalls,
+    not a service failure.
     """
     cache_key = hashkey(generic_name.strip().lower())
 
@@ -84,6 +87,11 @@ async def fetch_recall_evidence(generic_name: str) -> RecallEvidence:
 
     try:
         async with httpx.AsyncClient(timeout=8.0) as client:
+            # Search by product_description rather than openfda.generic_name.
+            # openfda.* annotations are sparsely populated in enforcement records —
+            # many recalls are never FDA-annotated and have no openfda block at all.
+            # product_description is always present (manufacturer-submitted) and
+            # ensures maximum recall coverage at the cost of occasional false positives.
             response = await client.get(
                 _BASE_URL,
                 params={
@@ -115,6 +123,9 @@ async def fetch_recall_evidence(generic_name: str) -> RecallEvidence:
     )
 
     recalls = [_normalize_record(r) for r in raw_results]
+    # Sort newest-first so recalls[0] is always the most recent.
+    # Records with unparseable dates (recall_date=None) sort to the end via datetime.min.
+    recalls.sort(key=lambda r: r.recall_date or datetime.min, reverse=True)
     evidence = RecallEvidence(recalls=recalls, total_count=total_count)
     _cache[cache_key] = evidence
     return evidence
