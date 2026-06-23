@@ -48,8 +48,8 @@ async def _get_setid(client: httpx.AsyncClient, rxcui: str) -> str:
         )
         response.raise_for_status()
     except httpx.HTTPStatusError as exc:
-        # DailyMed returns HTTP 500 with {"data": []} for malformed/non-numeric rxcui.
-        # Treat this as not-found rather than a service error.
+        # DailyMed HTTP 500 with empty data[] observed for invalid rxcui inputs —
+        # mapped to NotFoundError. This is documented API behaviour for malformed input.
         try:
             body = exc.response.json()
         except Exception:

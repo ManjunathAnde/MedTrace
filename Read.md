@@ -739,14 +739,17 @@ Status: **Critical** — if RxNorm fails, the investigation terminates immediate
 
 ## DailyMed
 
-Purpose: Official prescribing information
+Purpose: SPL label identity and discovery
 
 Provides:
 
-- Drug labels
-- Boxed warnings
-- Contraindications
-- Precautions
+- SPL label identity (rxcui → setid resolution)
+- Label metadata (version, title, publication date)
+- Label discovery via set_id
+
+Implementation note: DailyMed v2 REST API does not serve label text as JSON.
+Label text is fetched from OpenFDA using the setid resolved here.
+DailyMed remains the authoritative identity source for all label lookups.
 
 Status: Primary
 
@@ -769,7 +772,22 @@ Status: Primary
 
 ## OpenFDA
 
-Purpose: Safety event information
+Purpose: Drug label text delivery + safety event information
+
+OpenFDA has two distinct responsibilities in this system:
+
+**Responsibility 1 — Drug Label (via DailyMed bridge)**
+
+Provides:
+
+- Boxed warnings
+- Contraindications
+- Precautions
+
+Lookup method: `set_id` resolved by DailyMed. OpenFDA and DailyMed serve
+identical FDA SPL data; OpenFDA is used solely as the JSON delivery mechanism.
+
+**Responsibility 2 — Adverse Events**
 
 Provides:
 
