@@ -28,7 +28,12 @@ class FDARecallError(Exception):
 
 
 class FDARecallNotFoundError(FDARecallError):
-    pass
+    """
+    Defined for interface consistency with other API clients.
+    Not raised by fetch_recall_evidence — zero recalls is valid data, not an
+    exceptional condition. OpenFDA returns HTTP 404 when no enforcement records
+    match the query; this is handled by returning an empty RecallEvidence.
+    """
 
 
 class FDARecallServiceError(FDARecallError):

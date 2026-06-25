@@ -614,9 +614,10 @@ Gemini consumes structured evidence, not raw API responses.
 
 ```python
 DrugIdentity:
-    input_name: str
-    generic_name: str
-    rxcui: str
+    input_name: str           # exactly what the user typed
+    normalized_name: str      # canonical RxNorm preferred term
+    generic_name: str | None  # None if RxNorm returns no ingredient concept
+    rxcui: str | None         # None if resolution fails (non-critical)
     brand_names: list[str]
 
 LabelEvidence:
@@ -631,16 +632,16 @@ RecallEvidence:
 RecallRecord:
     recall_number: str
     reason: str
-    classification: str
-    date: str
+    classification: RecallClassification
+    recall_date: datetime | None  # FDA YYYYMMDD format; None if unparseable
     status: str
 
 AdverseEventEvidence:
     events: list[AdverseEvent]
-    total_count: int
+    total_count: int              # total FAERS reports for this drug
 
 AdverseEvent:
-    term: str
+    term: str    # title-cased MedDRA reaction term
     count: int
     serious: bool
 
@@ -650,17 +651,20 @@ InteractionEvidence:
 
 DrugInteraction:
     drug_name: str
-    severity: str
+    severity: InteractionSeverity
     description: str
 
 EvidenceMetadata:
     sources_attempted: int
     sources_succeeded: int
-    sources_failed: list[str]
-    completeness_score: float
+    sources_failed: int        # count of failed sources
+    successful_sources: list[str]  # names of APIs that returned data
+    failed_sources: list[str]      # names of APIs that failed
+    completeness_score: float  # sources_succeeded / sources_attempted; range [0.0, 1.0]
     retrieved_at: datetime
 
 MedicationEvidence:
+    profile_used: ProfileType
     drug_identity: DrugIdentity
     label_evidence: LabelEvidence | None
     recall_evidence: RecallEvidence | None

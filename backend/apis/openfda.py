@@ -34,7 +34,12 @@ class OpenFDAError(Exception):
 
 
 class OpenFDANotFoundError(OpenFDAError):
-    pass
+    """
+    Defined for interface consistency with other API clients.
+    Not raised by fetch_adverse_event_evidence — zero events is valid data, not an
+    exceptional condition. OpenFDA returns HTTP 404 when no adverse event records
+    match the query; this is handled by returning an empty AdverseEventEvidence.
+    """
 
 
 class OpenFDAServiceError(OpenFDAError):
