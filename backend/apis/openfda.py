@@ -5,6 +5,8 @@ All external API clients in this project are async. No synchronous clients are u
 Known limitation: OpenFDA caps results at 100 per call. Drugs with
 large adverse event histories may have truncated results. Pagination
 not implemented in V1.
+Returns top MAX_ADVERSE_EVENTS reaction terms by frequency.
+Truncated intentionally at this limit.
 
 Implementation note on total_count:
   The OpenFDA count aggregation endpoint (used to retrieve ranked reaction terms)
@@ -23,6 +25,8 @@ from backend.models.evidence import AdverseEvent, AdverseEventEvidence
 
 _BASE_URL = "https://api.fda.gov/drug/event.json"
 _cache: TTLCache = TTLCache(maxsize=100, ttl=86400)
+
+MAX_ADVERSE_EVENTS = 100
 
 
 class OpenFDAError(Exception):
@@ -53,7 +57,7 @@ async def _count_reactions(
             params={
                 "search": search,
                 "count": "patient.reaction.reactionmeddrapt.exact",
-                "limit": 100,
+                "limit": MAX_ADVERSE_EVENTS,
             },
         )
     except httpx.RequestError as exc:
@@ -159,7 +163,7 @@ async def fetch_adverse_event_evidence(generic_name: str) -> AdverseEventEvidenc
 
     events = [
         AdverseEvent(
-            term=item["term"],
+            term=item["term"].title(),
             count=item["count"],
             serious=item["term"].upper() in serious_terms,
         )
