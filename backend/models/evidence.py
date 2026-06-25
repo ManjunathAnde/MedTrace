@@ -38,6 +38,7 @@ class LabelEvidence(BaseSchema):
     boxed_warnings: list[str]
     contraindications: list[str]
     precautions: list[str]
+    drug_interactions: list[str]
 
 
 class RecallEvidence(BaseSchema):

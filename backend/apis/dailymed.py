@@ -143,6 +143,7 @@ async def fetch_label_evidence(rxcui: str) -> LabelEvidence:
             "warnings_and_precautions",
             "precautions",
         ),
+        drug_interactions=_extract_text_list(label, "drug_interactions"),
     )
 
     _cache[cache_key] = evidence

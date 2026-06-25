@@ -277,11 +277,11 @@ Retrieval behavior does not vary between executions.
 
 | Profile | Sources |
 |---|---|
-| Full Investigation | RxNorm → DailyMed → FDA Recall → OpenFDA → RxNav |
+| Full Investigation | RxNorm → DailyMed → FDA Recall → OpenFDA |
 | Warnings Review | RxNorm → DailyMed |
 | Contraindications Review | RxNorm → DailyMed |
 | Recall Investigation | RxNorm → FDA Recall |
-| Interaction Investigation | RxNorm → RxNav |
+| Interaction Investigation | RxNorm → DailyMed |
 | Adverse Event Investigation | RxNorm → OpenFDA |
 
 ---
@@ -306,8 +306,6 @@ DailyMed
 FDA Recall
         ↓
 OpenFDA
-        ↓
-RxNav
         ↓
 Evidence Aggregation
         ↓
@@ -413,7 +411,9 @@ Execution Plan:
 ```text
 RxNorm
         ↓
-RxNav
+DailyMed
+        ↓
+Label Interactions Extraction
         ↓
 Evidence Validation
         ↓
@@ -624,6 +624,7 @@ LabelEvidence:
     boxed_warnings: list[str]
     contraindications: list[str]
     precautions: list[str]
+    drug_interactions: list[str]  # FDA-labeled interaction text; empty list if absent
 
 RecallEvidence:
     recalls: list[RecallRecord]
@@ -701,10 +702,10 @@ Example:
 
 ```json
 {
-  "sources_attempted": 5,
-  "sources_succeeded": 4,
+  "sources_attempted": 4,
+  "sources_succeeded": 3,
   "sources_failed": ["OpenFDA"],
-  "completeness_score": 0.80
+  "completeness_score": 0.75
 }
 ```
 
@@ -787,6 +788,7 @@ Provides:
 - Boxed warnings
 - Contraindications
 - Precautions
+- Drug interactions (FDA-labeled prescribing information)
 
 Lookup method: `set_id` resolved by DailyMed. OpenFDA and DailyMed serve
 identical FDA SPL data; OpenFDA is used solely as the JSON delivery mechanism.
@@ -801,19 +803,11 @@ Provides:
 
 Important: Adverse event reports do NOT prove causation. The application must communicate this clearly in every report.
 
-Status: Supplemental
-
----
-
-## RxNav
-
-Purpose: Drug interaction information
-
-Provides:
-
-- Interaction detection
-- Interaction severity
-- Related medications
+Note on drug interactions: RxNav's public interaction service is no longer used.
+Drug interaction information is retrieved from FDA-approved prescribing information
+via the existing DailyMed/OpenFDA label pipeline. Interaction information represents
+FDA-approved labeled drug interactions. The system does not perform dynamic
+interaction checking between multiple medications.
 
 Status: Supplemental
 
@@ -824,7 +818,7 @@ Status: Supplemental
 ```text
 Critical:     RxNorm
 Primary:      DailyMed, FDA Recall
-Supplemental: OpenFDA, RxNav
+Supplemental: OpenFDA
 ```
 
 If RxNorm fails → investigation terminates, error returned to user.
@@ -882,9 +876,8 @@ For each entry:
 Verify:
 
 - RxNorm returns correct generic names
-- DailyMed returns expected warnings
+- DailyMed returns expected warnings and interaction text
 - FDA returns expected recall information
-- RxNav returns expected interactions
 
 ---
 
@@ -972,8 +965,7 @@ medication-intelligence-agent/
         │       │       ├── rxnorm.py
         │       │       ├── dailymed.py
         │       │       ├── fda_recall.py
-        │       │       ├── openfda.py
-        │       │       └── rxnav.py
+        │       │       └── openfda.py
         │       ├── models/
         │       │       ├── __init__.py
         │       │       └── evidence.py
