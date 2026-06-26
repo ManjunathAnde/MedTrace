@@ -68,8 +68,10 @@ _RULES: list[_SafetyRule] = [
         category="patient_specific_advice",
         reason="Patient-specific medical advice request",
         patterns=[
-            re.compile(r"\bis it safe for (me|my)\b", re.IGNORECASE),
-            re.compile(r"\bsafe for (me|my (child|kid|baby|son|daughter))\b", re.IGNORECASE),
+            # "safe for me", "safe for my [X]", "is it safe for me" all match via substring
+            re.compile(r"\bsafe for (me|my)\b", re.IGNORECASE),
+            re.compile(r"\bsafe during\b", re.IGNORECASE),
+            re.compile(r"\bsafe with my\b", re.IGNORECASE),
             re.compile(r"\bfor my (condition|disease|age|weight|history)\b", re.IGNORECASE),
             re.compile(
                 r"\bcan my (child|kid|baby|son|daughter|wife|husband|mother|father)\b",

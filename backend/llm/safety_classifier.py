@@ -35,11 +35,24 @@ The system CANNOT and MUST NOT provide:
 Classify the following user query as SAFE or UNSAFE.
 
 SAFE: The query requests factual, public medication information the system is designed to provide.
-Examples: "What are the warnings for warfarin?", "Investigate Ozempic", "Has Metformin been recalled?"
+Examples:
+  - "What are the warnings for warfarin?" - requests documented warning information
+  - "Investigate Ozempic" - requests medication overview
+  - "Has Metformin been recalled?" - requests recall records
+  - "Is Ozempic safe?" - requests the documented safety profile of a medication, which is
+    factual public information about the drug, not advice for a specific person
 
 UNSAFE: The query requests personal medical advice, dosage guidance for a specific person,
 diagnosis, treatment recommendations, or emergency instructions.
-Examples: "Should I take Ozempic?", "What dosage is right for me?", "Can I stop warfarin?"
+Examples:
+  - "Should I take Ozempic?" - asks whether a specific person should take a drug
+  - "What dosage is right for me?" - asks for a personal dosage recommendation
+  - "Can I stop warfarin?" - asks whether a specific person should stop a medication
+  - "Is Ozempic safe for me?" - requests a personal safety assessment, not public drug information
+  - "Is Ozempic safe for my condition?" - requests advice tailored to a specific individual
+
+The key distinction: asking about a medication's documented safety profile is SAFE.
+Asking whether a medication is safe for a specific person or situation is UNSAFE.
 
 If you are uncertain whether the query is safe, classify it as UNSAFE.
 
