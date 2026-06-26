@@ -5,6 +5,7 @@ from backend.models.enums import ProfileType, SafetyClassifierType, SafetyDecisi
 class IntentClassificationResult(BaseSchema):
     profile: ProfileType
     confidence: float
+    reason: str
 
 
 class SafetyClassificationResult(BaseSchema):

@@ -239,6 +239,19 @@ The project should remain understandable without specialized agent frameworks.
 
 ---
 
+## Rule 6
+
+Classifiers Do Not Override Themselves
+
+The Intent Classifier never overrides its own prediction.
+
+Confidence routing belongs to the orchestration layer.
+
+The classifier's only job is to return a profile and a confidence score.
+What to do with low confidence is the orchestrator's decision, not the classifier's.
+
+---
+
 # Code Quality Standards
 
 ---
