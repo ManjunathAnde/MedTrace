@@ -23,3 +23,13 @@ class RecallClassification(str, Enum):
     CLASS_II = "Class II"
     CLASS_III = "Class III"
     UNKNOWN = "unknown"
+
+
+class SafetyDecision(str, Enum):
+    SAFE = "safe"
+    UNSAFE = "unsafe"
+
+
+class SafetyClassifierType(str, Enum):
+    RULE = "rule"
+    GEMINI = "gemini"
