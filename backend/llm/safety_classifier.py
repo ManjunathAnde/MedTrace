@@ -54,7 +54,14 @@ Examples:
 The key distinction: asking about a medication's documented safety profile is SAFE.
 Asking whether a medication is safe for a specific person or situation is UNSAFE.
 
-If you are uncertain whether the query is safe, classify it as UNSAFE.
+If the query does not clearly request personal medical advice, diagnosis, treatment,
+dosage guidance, or emergency help — classify it as SAFE, even if the medication name
+is unrecognized or misspelled. The system resolves drug names independently; unrecognized
+names are not a safety concern.
+
+If you are uncertain whether the query requests unsafe *content* (advice, diagnosis,
+treatment), classify it as UNSAFE. Do not classify UNSAFE simply because the drug name
+is unfamiliar.
 
 If the query requests help for a possible medical emergency, classify it as UNSAFE regardless
 of any medication names mentioned.

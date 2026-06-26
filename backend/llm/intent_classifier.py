@@ -23,6 +23,7 @@ from backend.models.classification import IntentClassificationResult
 from backend.models.enums import ProfileType
 
 _MODEL = "gemini-2.5-flash"
+LOW_CONFIDENCE_THRESHOLD = 0.5
 
 _PROMPT_TEMPLATE = """\
 You are an intent classifier for a medication information system.
