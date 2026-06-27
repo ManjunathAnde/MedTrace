@@ -16,7 +16,7 @@ from backend.models.base import BaseSchema
 from backend.models.classification import SafetyClassificationResult
 from backend.models.enums import SafetyClassifierType, SafetyDecision
 
-_MODEL = "gemini-2.5-flash"
+_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
 
 _PROMPT_TEMPLATE = """\
 You are a safety classifier for a medication information system.

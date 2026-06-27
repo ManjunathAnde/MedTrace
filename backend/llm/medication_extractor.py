@@ -13,7 +13,7 @@ import os
 from google import genai
 from google.genai import errors as genai_errors, types
 
-_MODEL = "gemini-2.5-flash"
+_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
 
 _PROMPT_TEMPLATE = """\
 Extract the primary medication name from the following query.

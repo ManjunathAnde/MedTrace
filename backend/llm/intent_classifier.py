@@ -22,7 +22,7 @@ from backend.models.base import BaseSchema
 from backend.models.classification import IntentClassificationResult
 from backend.models.enums import ProfileType
 
-_MODEL = "gemini-2.5-flash"
+_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
 LOW_CONFIDENCE_THRESHOLD = 0.5
 
 _PROMPT_TEMPLATE = """\

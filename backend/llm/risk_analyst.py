@@ -22,7 +22,7 @@ from backend.models.enums import ProfileType
 from backend.models.evidence import MedicationEvidence
 from backend.models.report import MedicationReport
 
-_MODEL = "gemini-2.5-flash"
+_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
 
 _PROFILE_INSTRUCTIONS: dict[ProfileType, str] = {
     ProfileType.FULL_INVESTIGATION: """\
