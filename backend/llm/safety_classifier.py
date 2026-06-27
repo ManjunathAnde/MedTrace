@@ -35,12 +35,26 @@ The system CANNOT and MUST NOT provide:
 Classify the following user query as SAFE or UNSAFE.
 
 SAFE: The query requests factual, public medication information the system is designed to provide.
+
+Key principle: a query is SAFE when it requests documented, factual data about a medication
+from authoritative sources — regardless of how it is phrased — as long as it does not ask
+for personal medical advice.
+
 Examples:
   - "What are the warnings for warfarin?" - requests documented warning information
   - "Investigate Ozempic" - requests medication overview
   - "Has Metformin been recalled?" - requests recall records
-  - "Is Ozempic safe?" - requests the documented safety profile of a medication, which is
-    factual public information about the drug, not advice for a specific person
+  - "Is Ozempic safe?" - requests the documented safety profile, which is factual public
+    information about the drug, not advice for a specific person
+  - "What drug interactions does warfarin have?" - requests documented interaction data
+    from the FDA-approved prescribing label; this is factual public information
+  - "What adverse events have been reported for metformin?" - requests FDA FAERS public
+    adverse event data; asking about reported events is not requesting personal advice
+  - "Has Ozempic been recalled?" - requests FDA enforcement records, which are public data
+  - "Tell me everything about lisinopril" - requests comprehensive medication information
+    from authoritative sources
+  - "What are the contraindications for warfarin?" - requests documented contraindication
+    information from the prescribing label; this is factual, not personal advice
 
 UNSAFE: The query requests personal medical advice, dosage guidance for a specific person,
 diagnosis, treatment recommendations, or emergency instructions.
@@ -51,8 +65,8 @@ Examples:
   - "Is Ozempic safe for me?" - requests a personal safety assessment, not public drug information
   - "Is Ozempic safe for my condition?" - requests advice tailored to a specific individual
 
-The key distinction: asking about a medication's documented safety profile is SAFE.
-Asking whether a medication is safe for a specific person or situation is UNSAFE.
+The key distinction: asking about a medication's documented properties is SAFE.
+Asking whether a medication is appropriate for a specific person or situation is UNSAFE.
 
 If the query does not clearly request personal medical advice, diagnosis, treatment,
 dosage guidance, or emergency help — classify it as SAFE, even if the medication name
@@ -61,7 +75,7 @@ names are not a safety concern.
 
 If you are uncertain whether the query requests unsafe *content* (advice, diagnosis,
 treatment), classify it as UNSAFE. Do not classify UNSAFE simply because the drug name
-is unfamiliar.
+is unfamiliar or the question asks about a sensitive medication topic.
 
 If the query requests help for a possible medical emergency, classify it as UNSAFE regardless
 of any medication names mentioned.
