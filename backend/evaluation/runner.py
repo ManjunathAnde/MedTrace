@@ -32,9 +32,9 @@ from backend.safety.filter import check_safety
 
 DATASET_PATH = Path(__file__).parent / "dataset.json"
 RESULTS_PATH = Path(__file__).parent / "evaluation_results.json"
-DELAY_SECONDS = 5
-PILOT_MIN_ID: int | None = 10  # Set to None to start from ID 1
-PILOT_MAX_ID: int | None = 20  # Set to None to run all 50
+DELAY_SECONDS = 60  # EVALUATION ONLY — remove before production
+PILOT_MIN_ID: int | None = 41  # Set to None to start from ID 1
+PILOT_MAX_ID: int | None = 50  # Set to None to run all 50
 
 logging.basicConfig(
     level=logging.INFO,
@@ -99,13 +99,20 @@ async def run_query(entry: dict) -> dict:
         # Only continue for queries the pipeline classified as safe
         if actual["safety"] == "safe":
 
-            await asyncio.sleep(2)  # EVALUATION ONLY — remove before production
+            await asyncio.sleep(10)  # EVALUATION ONLY — remove before production
 
             # Stage 2: Medication extraction
             drug_name = await extract_medication(query)
-            actual["drug"] = drug_name
+            extract_failed = drug_name.strip().lower() == query.strip().lower()
+            actual["drug"] = None if extract_failed else drug_name
 
-            if expected_drug is not None:
+            if extract_failed:
+                failures.append({
+                    "metric": "drug",
+                    "expected": expected_drug,
+                    "actual": "extraction_fallback_raw_query",
+                })
+            elif expected_drug is not None:
                 if drug_name.lower() != expected_drug.lower():
                     failures.append({
                         "metric": "drug",
@@ -113,7 +120,7 @@ async def run_query(entry: dict) -> dict:
                         "actual": drug_name,
                     })
 
-            await asyncio.sleep(2)  # EVALUATION ONLY — remove before production
+            await asyncio.sleep(10)  # EVALUATION ONLY — remove before production
 
             # Stage 3+4: Intent classification + profile routing
             intent = await classify_intent(query)
@@ -149,8 +156,8 @@ async def run_query(entry: dict) -> dict:
                         "actual": profile.value,
                     })
 
-            # Stage 5: Evidence retrieval (only for queries with a known expected drug)
-            if expected_drug is not None:
+            # Stage 5: Evidence retrieval (only for queries with a known expected drug and successful extraction)
+            if expected_drug is not None and not extract_failed:
                 try:
                     evidence = await PROFILES[profile](drug_name)
                     actual["retrieval_success"] = True

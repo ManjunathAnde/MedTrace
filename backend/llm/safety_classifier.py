@@ -28,138 +28,230 @@ _MAX_ATTEMPTS = 3
 logger = logging.getLogger(__name__)
 
 _PROMPT_TEMPLATE = """\
-You are a safety classifier for a medication information system.
+# Medication Safety Classifier
 
-## What this system does
+Your job is **only** to determine whether a user's query can be answered by this medication information system.
 
-This system retrieves factual, public-domain medication information from four
-authoritative healthcare databases:
-- RxNorm: drug identities and generic names
-- DailyMed: FDA-approved prescribing labels (warnings, contraindications, interactions, precautions)
-- FDA Enforcement: official recall and withdrawal records
-- OpenFDA FAERS: publicly reported adverse event and safety signal data
+Do **NOT** answer the query.
 
-## Central Reasoning Principle
+Return only whether the query is **SAFE** or **UNSAFE**.
 
-Apply this single test to every query:
+---
 
-  SAFE   — The answer can be produced entirely from authoritative public medication
-            data without knowing anything about the user's personal health, medical
-            history, symptoms, diagnosis, age, or treatment situation.
+# Decision Rule (Apply First)
 
-  UNSAFE — Answering requires applying medical knowledge to a specific individual,
-            or recommending a course of action for that individual.
+Apply this single test to every query.
 
-This test is the only criterion that matters. Do not classify a query as UNSAFE
-because the topic sounds dangerous, the drug sounds serious, or the wording
-contains words like "warnings," "dangerous," "should not," or "contraindications."
-Those words describe the factual content of prescribing labels, not personal advice.
+**SAFE**
 
-## Query types that are always SAFE
+The answer can be produced entirely from authoritative public medication information without evaluating or making recommendations about an identifiable individual.
 
-The following query types ask for documented public information. Classify them SAFE
-regardless of which drug is named or how the question is phrased:
+Examples of authoritative public information include:
 
-1. Warning queries
-   The user asks what warnings or hazards are documented for a drug.
-   The answer comes from the DailyMed prescribing label. No personal information needed.
-   SAFE: "What are the warnings for Ozempic?"
-   SAFE: "Does warfarin have any serious warnings?"
-   SAFE: "What hazards are listed for metformin?"
+* FDA-approved prescribing information (DailyMed)
+* FDA Recall Database
+* OpenFDA FAERS adverse event reports
+* Drug interaction information documented in prescribing labels
+* Public medication identity information
 
-2. Contraindication queries
-   The user asks who must not take a drug or what conditions prohibit its use.
-   The answer lists population-level documented contraindications from the prescribing label.
-   Asking who should NOT take a drug in general is asking for a documented list, not
-   asking whether a specific person should take it.
-   SAFE: "Who should not take metformin?"
-   SAFE: "What are the contraindications for warfarin?"
-   SAFE: "When is aspirin contraindicated?"
+The answer may describe warnings, contraindications, precautions, interactions, recalls, adverse events, approved labeling, documented risks, information about patient populations described in official labeling — provided it does NOT require evaluating a specific person's situation.
 
-3. Drug interaction queries
-   The user asks what drug interactions are documented for a medication.
-   The answer comes from the prescribing label interaction section. No personal information needed.
-   SAFE: "What drug interactions does warfarin have?"
-   SAFE: "What drugs interact with Ozempic?"
-   SAFE: "Are there known interactions for metformin?"
+**UNSAFE**
 
-4. Adverse event and safety signal queries
-   The user asks what adverse events or safety signals have been reported for a drug.
-   The answer comes from OpenFDA FAERS public adverse event records. No personal information needed.
-   SAFE: "What adverse events have been reported for metformin?"
-   SAFE: "What safety signals exist for lisinopril in FAERS?"
-   SAFE: "What side effects have been reported for Ozempic?"
+The query requires evaluating, advising, or recommending something for an identifiable person. This includes deciding whether a specific individual should take, avoid, change, stop, start a medication, change dosage, seek emergency care, or applying medical knowledge to that person's own circumstances.
 
-5. Recall queries
-   The user asks whether a drug has been recalled or subject to FDA enforcement action.
-   The answer comes from FDA Enforcement records. No personal information needed.
-   SAFE: "Has Ozempic been recalled?"
-   SAFE: "Are there any recalls for metformin?"
+This distinction is the ONLY rule that matters.
 
-6. General information queries
-   The user asks for a broad overview or comprehensive information about a drug.
-   SAFE: "Tell me everything about lisinopril"
-   SAFE: "Investigate warfarin"
+Never classify a query as UNSAFE simply because the drug is high-risk, the condition is serious, or the wording includes: safe, dangerous, contraindicated, warning, risk, interaction. Those words frequently appear in FDA prescribing information.
 
-## Query types that are always UNSAFE
+---
 
-The following query types require information about a specific person and cannot be
-answered from public data alone:
+# Three Levels of Questions
 
-1. Personal medication decisions
-   UNSAFE: "Should I take Ozempic?"
-   UNSAFE: "Should my father take warfarin?"
+## Level 1 — Drug-Level Questions (Always SAFE)
 
-2. Personal dosage guidance
-   UNSAFE: "What dosage should I take?"
-   UNSAFE: "How much metformin should I be taking?"
+These ask only about the medication itself.
 
-3. Personal stop, start, or change decisions
-   UNSAFE: "Can I stop taking aspirin?"
-   UNSAFE: "Should I switch from warfarin to a different medication?"
+SAFE: What are the warnings for Ozempic?
+SAFE: What contraindications does warfarin have?
+SAFE: What precautions are listed for metformin?
+SAFE: What interactions are documented for aspirin?
+SAFE: Has Ozempic been recalled?
+SAFE: What adverse events have been reported for lisinopril?
+SAFE: Tell me everything about warfarin.
+SAFE: Investigate metformin.
+SAFE: Explain Ozempic.
+SAFE: Summarize the prescribing information for warfarin.
 
-4. Advice tailored to an individual
-   UNSAFE: "Is Ozempic right for me?"
-   UNSAFE: "Is warfarin safe for my condition?"
-   UNSAFE: "Is this safe for me personally?"
+## Level 2 — Population-Level Questions (Always SAFE)
 
-5. Medical emergency guidance
-   UNSAFE: "I took too much warfarin — what do I do?"
-   UNSAFE: "I think I overdosed."
+These ask what official medical documentation says about a patient population in general. They do NOT ask whether any specific person should take the medication. The answer comes directly from prescribing information.
 
-6. Diagnosis requests
-   UNSAFE: "Do I have diabetes?"
-   UNSAFE: "Am I at risk for a clot?"
+SAFE: Who should not take metformin?
+SAFE: What does the label say about metformin use in kidney disease?
+SAFE: Is metformin contraindicated in patients with kidney disease?
+SAFE: What precautions are listed for aspirin during pregnancy?
+SAFE: What does the prescribing information say about warfarin use in pregnancy?
+SAFE: What does the label say about pediatric use of aspirin?
+SAFE: Are elderly patients mentioned in the prescribing information for lisinopril?
+SAFE: Does the Ozempic label mention thyroid disease?
+SAFE: What conditions are listed as contraindications for Ozempic?
+SAFE: What populations require extra precautions when using warfarin?
 
-## The decisive distinction
+Even though these mention diseases or patient groups, they remain SAFE because they request documented public information rather than advice for a specific individual.
 
-SAFE queries ask: "What does the official medical record say about this drug?"
-UNSAFE queries ask: "What should THIS PERSON do about this drug?"
+## Level 3 — Individual Medical Advice (Always UNSAFE)
 
-Side-by-side:
-  "What are the contraindications for warfarin?"    → SAFE  (asks for the documented list)
-  "Do my contraindications rule out warfarin?"      → UNSAFE (asks about a specific person)
+These require evaluating someone's own circumstances.
 
-  "Who should not take metformin?"                  → SAFE  (asks for the population-level list)
-  "Should I not take metformin?"                    → UNSAFE (asks about a specific person)
+UNSAFE: Should I take Ozempic?
+UNSAFE: Should my father take warfarin?
+UNSAFE: Is Ozempic right for me?
+UNSAFE: Is metformin safe for my kidneys?
+UNSAFE: Is warfarin safe for my condition?
+UNSAFE: Should I stop taking aspirin?
+UNSAFE: Should I start metformin?
+UNSAFE: Is it okay for me to take Ozempic?
+UNSAFE: My mother has kidney disease. Should she take metformin?
+UNSAFE: My doctor prescribed warfarin. Should I take it?
 
-  "What are the warnings for Ozempic?"              → SAFE  (asks for prescribing-label content)
-  "Is Ozempic too dangerous for me to take?"        → UNSAFE (asks for a personal risk assessment)
+---
 
-  "What drug interactions does warfarin have?"      → SAFE  (asks for the documented interaction list)
-  "Is it safe for me to take warfarin with ibuprofen?" → UNSAFE (asks about a specific situation)
+# Always SAFE Query Categories
 
-## Additional rules
+## Warning Queries
+SAFE: What are the warnings for Ozempic?
+SAFE: What hazards are listed for metformin?
+SAFE: Does warfarin have any serious warnings?
+SAFE: What boxed warnings does aspirin have?
+SAFE: What precautions are listed for lisinopril?
 
-- Unrecognized or misspelled drug name: classify based on query type, not drug name.
-  The system resolves drug names independently. An unfamiliar drug name is not a safety concern.
+## Contraindication Queries
+SAFE: Who should not take metformin?
+SAFE: What are the contraindications for warfarin?
+SAFE: When is aspirin contraindicated?
+SAFE: What medical conditions prohibit Ozempic use?
+SAFE: Which patients are listed as contraindicated for lisinopril?
 
-- Genuine ambiguity: classify UNSAFE only when you cannot determine whether the query
-  requests public factual data or personalized guidance. Do not classify UNSAFE merely
-  because the subject matter sounds clinically sensitive.
+## Drug Interaction Queries
+SAFE: What drug interactions does warfarin have?
+SAFE: What drugs interact with Ozempic?
+SAFE: Are there known interactions for metformin?
+SAFE: Does aspirin interact with ibuprofen?
+SAFE: What interaction warnings are documented for lisinopril?
 
-- Medical emergencies: always classify UNSAFE when the user appears to be in or describing
-  an immediate medical situation requiring action, regardless of phrasing.
+## Adverse Event Queries
+SAFE: What adverse events have been reported for metformin?
+SAFE: What safety signals exist for lisinopril in FAERS?
+SAFE: What side effects have been reported for Ozempic?
+SAFE: What adverse reactions are most frequently reported for warfarin?
+SAFE: What does FAERS report for aspirin?
+
+## Recall Queries
+SAFE: Has Ozempic been recalled?
+SAFE: Are there any recalls for metformin?
+SAFE: Why was warfarin recalled?
+SAFE: Has aspirin been subject to FDA enforcement?
+SAFE: Has lisinopril ever been recalled?
+
+## General Investigation Queries
+SAFE: Investigate Ozempic.
+SAFE: Analyze warfarin.
+SAFE: Tell me everything about metformin.
+SAFE: Summarize aspirin.
+SAFE: Give me a complete overview of lisinopril.
+
+## General Safety Profile Queries
+The user asks whether a drug is generally safe or dangerous as a medication. The answer comes from the drug's documented safety profile. No individual patient information needed.
+
+SAFE: Is Ozempic safe?
+SAFE: Is warfarin dangerous?
+SAFE: Is metformin a safe medication?
+SAFE: Is aspirin safe?
+SAFE: Is lisinopril a dangerous drug?
+
+These become UNSAFE only when they reference a specific individual:
+UNSAFE: Is Ozempic safe for me?
+UNSAFE: Is warfarin safe for my condition?
+
+The trigger for UNSAFE is "me", "my", "I" or a specific named individual — not the drug name or topic itself.
+
+---
+
+# Always UNSAFE Query Categories
+
+## Personal Medication Decisions
+UNSAFE: Should I take Ozempic?
+UNSAFE: Should my father take warfarin?
+UNSAFE: Should she continue aspirin?
+
+## Dosage Advice
+UNSAFE: What dosage should I take?
+UNSAFE: How much metformin should I be taking?
+UNSAFE: Is 10 mg enough for me?
+
+## Start / Stop / Change
+UNSAFE: Can I stop taking aspirin?
+UNSAFE: Should I switch medications?
+UNSAFE: Should I increase my dose?
+
+## Personal Risk Assessment
+UNSAFE: Is Ozempic right for me?
+UNSAFE: Is warfarin safe for my condition?
+UNSAFE: Is metformin safe for my kidneys?
+UNSAFE: Is this medication appropriate for me?
+UNSAFE: Should someone like me take Ozempic?
+
+## Emergency Guidance
+UNSAFE: I overdosed.
+UNSAFE: I took too much warfarin.
+UNSAFE: My child swallowed aspirin.
+UNSAFE: What should I do right now?
+
+## Diagnosis
+UNSAFE: Do I have diabetes?
+UNSAFE: Am I having a heart attack?
+UNSAFE: Am I at risk for a stroke?
+
+---
+
+# Side-by-Side Boundary Examples
+
+SAFE: What are the contraindications for warfarin?
+UNSAFE: Do my medical conditions mean I should not take warfarin?
+
+SAFE: What does the label say about metformin use in kidney disease?
+UNSAFE: I have kidney disease. Should I take metformin?
+
+SAFE: Who should not take Ozempic?
+UNSAFE: Should I avoid Ozempic?
+
+SAFE: What interactions are documented between warfarin and ibuprofen?
+UNSAFE: Is it safe for me to take warfarin with ibuprofen?
+
+SAFE: What precautions are listed for aspirin during pregnancy?
+UNSAFE: I'm pregnant. Should I take aspirin?
+
+SAFE: What adverse events have been reported for Ozempic?
+UNSAFE: Do these side effects mean I should stop taking Ozempic?
+
+SAFE: Is Ozempic safe?
+UNSAFE: Is Ozempic safe for me?
+
+SAFE: Is metformin safe for people with kidney disease?
+UNSAFE: Is metformin safe for my kidney disease?
+
+---
+
+# Additional Rules
+
+* Classify based on intent, not on the drug name.
+* Unknown or misspelled drug names are NOT a safety concern.
+* A mention of a disease, condition, pregnancy, age group, or patient population does NOT automatically make a query UNSAFE.
+* Population-level questions about official prescribing information remain SAFE.
+* Only classify UNSAFE when the user asks about an identifiable individual or requests a recommendation or course of action for that individual.
+* Medical emergencies are always UNSAFE.
+* Classify UNSAFE only when you cannot determine whether answering requires knowing anything about a specific identifiable person. Do not classify UNSAFE merely because the subject matter sounds clinically sensitive or the drug is high-risk.
 
 User query: "{query}"
 """
