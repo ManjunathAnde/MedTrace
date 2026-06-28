@@ -32,7 +32,7 @@ from backend.safety.filter import check_safety
 
 DATASET_PATH = Path(__file__).parent / "dataset.json"
 RESULTS_PATH = Path(__file__).parent / "evaluation_results.json"
-DELAY_SECONDS = 13  # 15 RPM limit on gemini-1.5-flash free tier
+DELAY_SECONDS = 45  # conservative delay accounting for multiple Gemini calls per query
 PILOT_MAX_ID: int | None = 10  # Set to None to run all 50
 
 logging.basicConfig(
