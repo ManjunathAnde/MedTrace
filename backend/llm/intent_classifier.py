@@ -13,13 +13,14 @@ the orchestration layer.
 """
 
 import os
+import time
 
 from google import genai
 from google.genai import errors as genai_errors, types
 from pydantic import Field, ValidationError
 
 from backend.models.base import BaseSchema
-from backend.models.classification import IntentClassificationResult
+from backend.models.classification import IntentClassificationResult, LLMCallDiagnostics
 from backend.models.enums import ProfileType
 
 _MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
@@ -118,11 +119,24 @@ class _GeminiIntentResponse(BaseSchema):
     reason: str
 
 
-def _fail_safe() -> IntentClassificationResult:
+def _fail_safe(
+    duration_ms: float = 0.0,
+    api_error_type: str | None = None,
+    validation_error: bool = False,
+) -> IntentClassificationResult:
+    fallback_reason = "validation_error" if validation_error else "api_error"
     return IntentClassificationResult(
         profile=ProfileType.FULL_INVESTIGATION,
         confidence=0.0,
         reason="intent_classifier_unavailable",
+        diagnostics=LLMCallDiagnostics(
+            model=_MODEL,
+            duration_ms=round(duration_ms, 1),
+            fallback_used=True,
+            fallback_reason=fallback_reason,
+            api_error_type=api_error_type,
+            validation_error=validation_error,
+        ),
     )
 
 
@@ -135,6 +149,7 @@ async def classify_intent(query: str) -> IntentClassificationResult:
     """
     client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
     prompt = _PROMPT_TEMPLATE.format(query=query)
+    t0 = time.perf_counter()
 
     try:
         response = await client.aio.models.generate_content(
@@ -146,13 +161,28 @@ async def classify_intent(query: str) -> IntentClassificationResult:
             ),
         )
         raw = _GeminiIntentResponse.model_validate_json(response.text)
-    except genai_errors.APIError:
-        return _fail_safe()
+    except genai_errors.APIError as exc:
+        return _fail_safe(
+            (time.perf_counter() - t0) * 1000,
+            api_error_type=f"{type(exc).__name__}({getattr(exc, 'code', '?')})",
+        )
     except ValidationError:
-        return _fail_safe()
+        return _fail_safe(
+            (time.perf_counter() - t0) * 1000,
+            validation_error=True,
+        )
 
+    duration_ms = (time.perf_counter() - t0) * 1000
     return IntentClassificationResult(
         profile=raw.profile,
         confidence=raw.confidence,
         reason=raw.reason,
+        diagnostics=LLMCallDiagnostics(
+            model=_MODEL,
+            duration_ms=round(duration_ms, 1),
+            fallback_used=False,
+            fallback_reason=None,
+            api_error_type=None,
+            validation_error=False,
+        ),
     )

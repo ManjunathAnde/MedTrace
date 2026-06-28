@@ -51,9 +51,11 @@ async def run_query(entry: dict) -> dict:
     actual: dict = {
         "safety": None,
         "safety_classifier": None,
+        "safety_diagnostics": None,
         "drug": None,
         "profile": None,
         "profile_confidence": None,
+        "intent_diagnostics": None,
         "retrieval_success": None,
         "completeness_score": None,
     }
@@ -66,6 +68,24 @@ async def run_query(entry: dict) -> dict:
         actual["safety"] = safety_result.decision.value
         actual["safety_classifier"] = safety_result.classifier.value
 
+        if safety_result.diagnostics is not None:
+            d = safety_result.diagnostics
+            actual["safety_diagnostics"] = {
+                "model": d.model,
+                "duration_ms": d.duration_ms,
+                "fallback_used": d.fallback_used,
+                "fallback_reason": d.fallback_reason,
+                "api_error_type": d.api_error_type,
+                "validation_error": d.validation_error,
+            }
+            logger.info(
+                "  SAFETY diag: model=%s duration_ms=%.1f fallback=%s api_error=%s",
+                d.model,
+                d.duration_ms,
+                d.fallback_used,
+                d.api_error_type,
+            )
+
         if actual["safety"] != expected_safety:
             failures.append({
                 "metric": "safety",
@@ -75,6 +95,8 @@ async def run_query(entry: dict) -> dict:
 
         # Only continue for queries the pipeline classified as safe
         if actual["safety"] == "safe":
+
+            await asyncio.sleep(2)  # EVALUATION ONLY — remove before production
 
             # Stage 2: Medication extraction
             drug_name = await extract_medication(query)
@@ -88,11 +110,31 @@ async def run_query(entry: dict) -> dict:
                         "actual": drug_name,
                     })
 
+            await asyncio.sleep(2)  # EVALUATION ONLY — remove before production
+
             # Stage 3+4: Intent classification + profile routing
             intent = await classify_intent(query)
             profile = resolve_profile(intent)
             actual["profile"] = profile.value
             actual["profile_confidence"] = round(intent.confidence, 3)
+
+            if intent.diagnostics is not None:
+                d = intent.diagnostics
+                actual["intent_diagnostics"] = {
+                    "model": d.model,
+                    "duration_ms": d.duration_ms,
+                    "fallback_used": d.fallback_used,
+                    "fallback_reason": d.fallback_reason,
+                    "api_error_type": d.api_error_type,
+                    "validation_error": d.validation_error,
+                }
+                logger.info(
+                    "  INTENT  diag: model=%s duration_ms=%.1f fallback=%s api_error=%s",
+                    d.model,
+                    d.duration_ms,
+                    d.fallback_used,
+                    d.api_error_type,
+                )
 
             if acceptable_profiles is not None:
                 if profile.value not in acceptable_profiles:

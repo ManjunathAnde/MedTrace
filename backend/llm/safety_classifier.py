@@ -7,13 +7,14 @@ Gemini unavailability never permits an unsafe query through.
 """
 
 import os
+import time
 
 from google import genai
 from google.genai import errors as genai_errors, types
 from pydantic import ValidationError
 
 from backend.models.base import BaseSchema
-from backend.models.classification import SafetyClassificationResult
+from backend.models.classification import LLMCallDiagnostics, SafetyClassificationResult
 from backend.models.enums import SafetyClassifierType, SafetyDecision
 
 _MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
@@ -163,11 +164,24 @@ class _GeminiSafetyResponse(BaseSchema):
     reason: str
 
 
-def _fail_closed() -> SafetyClassificationResult:
+def _fail_closed(
+    duration_ms: float,
+    api_error_type: str | None = None,
+    validation_error: bool = False,
+) -> SafetyClassificationResult:
+    fallback_reason = "validation_error" if validation_error else "api_error"
     return SafetyClassificationResult(
         decision=SafetyDecision.UNSAFE,
         reason="safety_classifier_unavailable",
         classifier=SafetyClassifierType.GEMINI,
+        diagnostics=LLMCallDiagnostics(
+            model=_MODEL,
+            duration_ms=round(duration_ms, 1),
+            fallback_used=True,
+            fallback_reason=fallback_reason,
+            api_error_type=api_error_type,
+            validation_error=validation_error,
+        ),
     )
 
 
@@ -180,6 +194,7 @@ async def classify_safety(query: str) -> SafetyClassificationResult:
     """
     client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
     prompt = _PROMPT_TEMPLATE.format(query=query)
+    t0 = time.perf_counter()
 
     try:
         response = await client.aio.models.generate_content(
@@ -191,13 +206,28 @@ async def classify_safety(query: str) -> SafetyClassificationResult:
             ),
         )
         raw = _GeminiSafetyResponse.model_validate_json(response.text)
-    except genai_errors.APIError:
-        return _fail_closed()
+    except genai_errors.APIError as exc:
+        return _fail_closed(
+            (time.perf_counter() - t0) * 1000,
+            api_error_type=f"{type(exc).__name__}({getattr(exc, 'code', '?')})",
+        )
     except ValidationError:
-        return _fail_closed()
+        return _fail_closed(
+            (time.perf_counter() - t0) * 1000,
+            validation_error=True,
+        )
 
+    duration_ms = (time.perf_counter() - t0) * 1000
     return SafetyClassificationResult(
         decision=raw.decision,
         reason=raw.reason,
         classifier=SafetyClassifierType.GEMINI,
+        diagnostics=LLMCallDiagnostics(
+            model=_MODEL,
+            duration_ms=round(duration_ms, 1),
+            fallback_used=False,
+            fallback_reason=None,
+            api_error_type=None,
+            validation_error=False,
+        ),
     )
