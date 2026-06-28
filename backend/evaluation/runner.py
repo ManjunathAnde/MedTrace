@@ -32,8 +32,9 @@ from backend.safety.filter import check_safety
 
 DATASET_PATH = Path(__file__).parent / "dataset.json"
 RESULTS_PATH = Path(__file__).parent / "evaluation_results.json"
-DELAY_SECONDS = 45  # conservative delay accounting for multiple Gemini calls per query
-PILOT_MAX_ID: int | None = 10  # Set to None to run all 50
+DELAY_SECONDS = 5
+PILOT_MIN_ID: int | None = 10  # Set to None to start from ID 1
+PILOT_MAX_ID: int | None = 20  # Set to None to run all 50
 
 logging.basicConfig(
     level=logging.INFO,
@@ -77,12 +78,14 @@ async def run_query(entry: dict) -> dict:
                 "fallback_reason": d.fallback_reason,
                 "api_error_type": d.api_error_type,
                 "validation_error": d.validation_error,
+                "attempts": d.attempts,
             }
             logger.info(
-                "  SAFETY diag: model=%s duration_ms=%.1f fallback=%s api_error=%s",
+                "  SAFETY diag: model=%s duration_ms=%.1f fallback=%s attempts=%d api_error=%s",
                 d.model,
                 d.duration_ms,
                 d.fallback_used,
+                d.attempts,
                 d.api_error_type,
             )
 
@@ -127,12 +130,14 @@ async def run_query(entry: dict) -> dict:
                     "fallback_reason": d.fallback_reason,
                     "api_error_type": d.api_error_type,
                     "validation_error": d.validation_error,
+                    "attempts": d.attempts,
                 }
                 logger.info(
-                    "  INTENT  diag: model=%s duration_ms=%.1f fallback=%s api_error=%s",
+                    "  INTENT  diag: model=%s duration_ms=%.1f fallback=%s attempts=%d api_error=%s",
                     d.model,
                     d.duration_ms,
                     d.fallback_used,
+                    d.attempts,
                     d.api_error_type,
                 )
 
@@ -202,9 +207,17 @@ async def run_query(entry: dict) -> dict:
 
 async def main() -> None:
     dataset = json.loads(DATASET_PATH.read_text(encoding="utf-8"))
-    if PILOT_MAX_ID is not None:
-        dataset = [e for e in dataset if e["id"] <= PILOT_MAX_ID]
-        logger.info("PILOT MODE: running IDs 1-%d only.", PILOT_MAX_ID)
+    if PILOT_MIN_ID is not None or PILOT_MAX_ID is not None:
+        dataset = [
+            e for e in dataset
+            if (PILOT_MIN_ID is None or e["id"] >= PILOT_MIN_ID)
+            and (PILOT_MAX_ID is None or e["id"] <= PILOT_MAX_ID)
+        ]
+        logger.info(
+            "PILOT MODE: running IDs %d-%d only.",
+            PILOT_MIN_ID or 1,
+            PILOT_MAX_ID or 50,
+        )
     total = len(dataset)
     est_minutes = (total * DELAY_SECONDS) // 60
     logger.info(

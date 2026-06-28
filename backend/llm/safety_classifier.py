@@ -4,8 +4,13 @@ Gemini Stage 2 safety classifier.
 Called only when the Stage 1 rule engine finds no match. Fails closed on all
 API errors, network failures, and response validation failures so that genuine
 Gemini unavailability never permits an unsafe query through.
+
+Retry policy: up to 3 attempts with linear backoff on ServerError (5xx).
+ClientError (4xx, including 429) and ValidationError are not retried.
 """
 
+import asyncio
+import logging
 import os
 import time
 
@@ -18,6 +23,9 @@ from backend.models.classification import LLMCallDiagnostics, SafetyClassificati
 from backend.models.enums import SafetyClassifierType, SafetyDecision
 
 _MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+_MAX_ATTEMPTS = 3
+
+logger = logging.getLogger(__name__)
 
 _PROMPT_TEMPLATE = """\
 You are a safety classifier for a medication information system.
@@ -166,6 +174,7 @@ class _GeminiSafetyResponse(BaseSchema):
 
 def _fail_closed(
     duration_ms: float,
+    attempts: int,
     api_error_type: str | None = None,
     validation_error: bool = False,
 ) -> SafetyClassificationResult:
@@ -181,6 +190,7 @@ def _fail_closed(
             fallback_reason=fallback_reason,
             api_error_type=api_error_type,
             validation_error=validation_error,
+            attempts=attempts,
         ),
     )
 
@@ -189,45 +199,66 @@ async def classify_safety(query: str) -> SafetyClassificationResult:
     """
     Classify a query using Gemini structured output.
 
-    Catches only expected runtime failures (API errors, network errors,
-    response validation errors). Programming errors propagate normally.
+    Retries up to _MAX_ATTEMPTS times on ServerError (5xx). ClientError (4xx)
+    and ValidationError are not retried. Fails closed on exhaustion.
     """
     client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
     prompt = _PROMPT_TEMPLATE.format(query=query)
-    t0 = time.perf_counter()
+    t_total = time.perf_counter()
+    last_error_type: str | None = None
 
-    try:
-        response = await client.aio.models.generate_content(
-            model=_MODEL,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=_GeminiSafetyResponse,
-            ),
-        )
-        raw = _GeminiSafetyResponse.model_validate_json(response.text)
-    except genai_errors.APIError as exc:
-        return _fail_closed(
-            (time.perf_counter() - t0) * 1000,
-            api_error_type=f"{type(exc).__name__}({getattr(exc, 'code', '?')})",
-        )
-    except ValidationError:
-        return _fail_closed(
-            (time.perf_counter() - t0) * 1000,
-            validation_error=True,
-        )
+    for attempt in range(1, _MAX_ATTEMPTS + 1):
+        try:
+            response = await client.aio.models.generate_content(
+                model=_MODEL,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=_GeminiSafetyResponse,
+                ),
+            )
+            raw = _GeminiSafetyResponse.model_validate_json(response.text)
+            return SafetyClassificationResult(
+                decision=raw.decision,
+                reason=raw.reason,
+                classifier=SafetyClassifierType.GEMINI,
+                diagnostics=LLMCallDiagnostics(
+                    model=_MODEL,
+                    duration_ms=round((time.perf_counter() - t_total) * 1000, 1),
+                    fallback_used=False,
+                    fallback_reason=None,
+                    api_error_type=None,
+                    validation_error=False,
+                    attempts=attempt,
+                ),
+            )
+        except genai_errors.ServerError as exc:
+            last_error_type = f"{type(exc).__name__}({getattr(exc, 'code', '?')})"
+            logger.warning(
+                "  SAFETY attempt %d/%d failed: %s — %s",
+                attempt,
+                _MAX_ATTEMPTS,
+                last_error_type,
+                "retrying" if attempt < _MAX_ATTEMPTS else "giving up",
+            )
+            if attempt < _MAX_ATTEMPTS:
+                await asyncio.sleep(attempt * 2)  # 2s after attempt 1, 4s after attempt 2
+        except genai_errors.APIError as exc:
+            # Non-retryable (429 quota, 400 bad request, etc.)
+            return _fail_closed(
+                (time.perf_counter() - t_total) * 1000,
+                attempts=attempt,
+                api_error_type=f"{type(exc).__name__}({getattr(exc, 'code', '?')})",
+            )
+        except ValidationError:
+            return _fail_closed(
+                (time.perf_counter() - t_total) * 1000,
+                attempts=attempt,
+                validation_error=True,
+            )
 
-    duration_ms = (time.perf_counter() - t0) * 1000
-    return SafetyClassificationResult(
-        decision=raw.decision,
-        reason=raw.reason,
-        classifier=SafetyClassifierType.GEMINI,
-        diagnostics=LLMCallDiagnostics(
-            model=_MODEL,
-            duration_ms=round(duration_ms, 1),
-            fallback_used=False,
-            fallback_reason=None,
-            api_error_type=None,
-            validation_error=False,
-        ),
+    return _fail_closed(
+        (time.perf_counter() - t_total) * 1000,
+        attempts=_MAX_ATTEMPTS,
+        api_error_type=last_error_type,
     )

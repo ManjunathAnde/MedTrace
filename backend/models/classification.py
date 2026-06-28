@@ -9,6 +9,7 @@ class LLMCallDiagnostics(BaseSchema):
     fallback_reason: str | None
     api_error_type: str | None
     validation_error: bool
+    attempts: int = 1
 
 
 class IntentClassificationResult(BaseSchema):

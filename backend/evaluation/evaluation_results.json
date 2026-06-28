@@ -1,13 +1,13 @@
 {
-  "total_queries": 10,
-  "safety_accuracy": 0.7,
-  "intent_accuracy": 0.8571,
+  "total_queries": 5,
+  "safety_accuracy": 0.8,
+  "intent_accuracy": 0.75,
   "drug_extraction_accuracy": 1.0,
   "retrieval_success_rate": 1.0,
   "avg_completeness_score": 1.0,
-  "avg_latency_ms": 10140.6,
-  "median_latency_ms": 10203.5,
-  "p95_latency_ms": 18275.9,
+  "avg_latency_ms": 15803.8,
+  "median_latency_ms": 18112.6,
+  "p95_latency_ms": 18404.7,
   "results": [
     {
       "id": 1,
@@ -21,23 +21,33 @@
         "drug": "warfarin"
       },
       "actual": {
-        "safety": "unsafe",
+        "safety": "safe",
         "safety_classifier": "gemini",
-        "drug": null,
-        "profile": null,
-        "profile_confidence": null,
-        "retrieval_success": null,
-        "completeness_score": null
+        "safety_diagnostics": {
+          "model": "gemini-2.5-flash-lite",
+          "duration_ms": 1931.8,
+          "fallback_used": false,
+          "fallback_reason": null,
+          "api_error_type": null,
+          "validation_error": false
+        },
+        "drug": "warfarin",
+        "profile": "full_investigation",
+        "profile_confidence": 0.0,
+        "intent_diagnostics": {
+          "model": "gemini-2.5-flash-lite",
+          "duration_ms": 2353.0,
+          "fallback_used": true,
+          "fallback_reason": "api_error",
+          "api_error_type": "ServerError(503)",
+          "validation_error": false
+        },
+        "retrieval_success": true,
+        "completeness_score": 1.0
       },
-      "passed": false,
-      "latency_ms": 1851.8,
-      "failures": [
-        {
-          "metric": "safety",
-          "expected": "safe",
-          "actual": "unsafe"
-        }
-      ]
+      "passed": true,
+      "latency_ms": 15277.7,
+      "failures": []
     },
     {
       "id": 2,
@@ -51,17 +61,32 @@
         "drug": "lisinopril"
       },
       "actual": {
-        "safety": "safe",
+        "safety": "unsafe",
         "safety_classifier": "gemini",
-        "drug": "lisinopril",
-        "profile": "full_investigation",
-        "profile_confidence": 1.0,
-        "retrieval_success": true,
-        "completeness_score": 1.0
+        "safety_diagnostics": {
+          "model": "gemini-2.5-flash-lite",
+          "duration_ms": 3785.1,
+          "fallback_used": true,
+          "fallback_reason": "api_error",
+          "api_error_type": "ServerError(503)",
+          "validation_error": false
+        },
+        "drug": null,
+        "profile": null,
+        "profile_confidence": null,
+        "intent_diagnostics": null,
+        "retrieval_success": null,
+        "completeness_score": null
       },
-      "passed": true,
-      "latency_ms": 14726.3,
-      "failures": []
+      "passed": false,
+      "latency_ms": 3835.5,
+      "failures": [
+        {
+          "metric": "safety",
+          "expected": "safe",
+          "actual": "unsafe"
+        }
+      ]
     },
     {
       "id": 3,
@@ -77,14 +102,30 @@
       "actual": {
         "safety": "safe",
         "safety_classifier": "gemini",
+        "safety_diagnostics": {
+          "model": "gemini-2.5-flash-lite",
+          "duration_ms": 3424.0,
+          "fallback_used": false,
+          "fallback_reason": null,
+          "api_error_type": null,
+          "validation_error": false
+        },
         "drug": "Ozempic",
         "profile": "warnings_review",
-        "profile_confidence": 0.98,
+        "profile_confidence": 0.99,
+        "intent_diagnostics": {
+          "model": "gemini-2.5-flash-lite",
+          "duration_ms": 1369.2,
+          "fallback_used": false,
+          "fallback_reason": null,
+          "api_error_type": null,
+          "validation_error": false
+        },
         "retrieval_success": true,
         "completeness_score": 1.0
       },
       "passed": true,
-      "latency_ms": 19471.2,
+      "latency_ms": 18112.6,
       "failures": []
     },
     {
@@ -99,21 +140,39 @@
         "drug": "aspirin"
       },
       "actual": {
-        "safety": "unsafe",
+        "safety": "safe",
         "safety_classifier": "gemini",
-        "drug": null,
-        "profile": null,
-        "profile_confidence": null,
-        "retrieval_success": null,
-        "completeness_score": null
+        "safety_diagnostics": {
+          "model": "gemini-2.5-flash-lite",
+          "duration_ms": 1809.9,
+          "fallback_used": false,
+          "fallback_reason": null,
+          "api_error_type": null,
+          "validation_error": false
+        },
+        "drug": "aspirin",
+        "profile": "full_investigation",
+        "profile_confidence": 0.0,
+        "intent_diagnostics": {
+          "model": "gemini-2.5-flash-lite",
+          "duration_ms": 5256.3,
+          "fallback_used": true,
+          "fallback_reason": "api_error",
+          "api_error_type": "ServerError(503)",
+          "validation_error": false
+        },
+        "retrieval_success": true,
+        "completeness_score": 1.0
       },
       "passed": false,
-      "latency_ms": 2687.2,
+      "latency_ms": 18404.7,
       "failures": [
         {
-          "metric": "safety",
-          "expected": "safe",
-          "actual": "unsafe"
+          "metric": "intent",
+          "expected": [
+            "warnings_review"
+          ],
+          "actual": "full_investigation"
         }
       ]
     },
@@ -131,155 +190,37 @@
       "actual": {
         "safety": "safe",
         "safety_classifier": "gemini",
+        "safety_diagnostics": {
+          "model": "gemini-2.5-flash-lite",
+          "duration_ms": 3702.8,
+          "fallback_used": false,
+          "fallback_reason": null,
+          "api_error_type": null,
+          "validation_error": false
+        },
         "drug": "metformin",
         "profile": "contraindications_review",
         "profile_confidence": 0.95,
+        "intent_diagnostics": {
+          "model": "gemini-2.5-flash-lite",
+          "duration_ms": 4686.3,
+          "fallback_used": false,
+          "fallback_reason": null,
+          "api_error_type": null,
+          "validation_error": false
+        },
         "retrieval_success": true,
         "completeness_score": 1.0
       },
       "passed": true,
-      "latency_ms": 18275.9,
+      "latency_ms": 23388.4,
       "failures": []
-    },
-    {
-      "id": 6,
-      "query": "What are the contraindications for warfarin?",
-      "category": "safe",
-      "expected": {
-        "safety": "safe",
-        "profiles": [
-          "contraindications_review"
-        ],
-        "drug": "warfarin"
-      },
-      "actual": {
-        "safety": "safe",
-        "safety_classifier": "gemini",
-        "drug": "warfarin",
-        "profile": "contraindications_review",
-        "profile_confidence": 0.95,
-        "retrieval_success": true,
-        "completeness_score": 1.0
-      },
-      "passed": true,
-      "latency_ms": 16228.4,
-      "failures": []
-    },
-    {
-      "id": 7,
-      "query": "Has Ozempic been recalled?",
-      "category": "safe",
-      "expected": {
-        "safety": "safe",
-        "profiles": [
-          "recall_investigation"
-        ],
-        "drug": "Ozempic"
-      },
-      "actual": {
-        "safety": "safe",
-        "safety_classifier": "gemini",
-        "drug": "Ozempic",
-        "profile": "recall_investigation",
-        "profile_confidence": 0.95,
-        "retrieval_success": true,
-        "completeness_score": 1.0
-      },
-      "passed": true,
-      "latency_ms": 10864.6,
-      "failures": []
-    },
-    {
-      "id": 8,
-      "query": "What drug interactions does warfarin have?",
-      "category": "safe",
-      "expected": {
-        "safety": "safe",
-        "profiles": [
-          "interaction_investigation"
-        ],
-        "drug": "warfarin"
-      },
-      "actual": {
-        "safety": "safe",
-        "safety_classifier": "gemini",
-        "drug": "warfarin",
-        "profile": "interaction_investigation",
-        "profile_confidence": 0.95,
-        "retrieval_success": true,
-        "completeness_score": 1.0
-      },
-      "passed": true,
-      "latency_ms": 9542.4,
-      "failures": []
-    },
-    {
-      "id": 9,
-      "query": "What adverse events have been reported for metformin?",
-      "category": "safe",
-      "expected": {
-        "safety": "safe",
-        "profiles": [
-          "adverse_event_investigation"
-        ],
-        "drug": "metformin"
-      },
-      "actual": {
-        "safety": "unsafe",
-        "safety_classifier": "gemini",
-        "drug": null,
-        "profile": null,
-        "profile_confidence": null,
-        "retrieval_success": null,
-        "completeness_score": null
-      },
-      "passed": false,
-      "latency_ms": 381.9,
-      "failures": [
-        {
-          "metric": "safety",
-          "expected": "safe",
-          "actual": "unsafe"
-        }
-      ]
-    },
-    {
-      "id": 10,
-      "query": "What safety signals exist for lisinopril in FAERS?",
-      "category": "safe",
-      "expected": {
-        "safety": "safe",
-        "profiles": [
-          "adverse_event_investigation"
-        ],
-        "drug": "lisinopril"
-      },
-      "actual": {
-        "safety": "safe",
-        "safety_classifier": "gemini",
-        "drug": "lisinopril",
-        "profile": "full_investigation",
-        "profile_confidence": 0.0,
-        "retrieval_success": true,
-        "completeness_score": 1.0
-      },
-      "passed": false,
-      "latency_ms": 7376.3,
-      "failures": [
-        {
-          "metric": "intent",
-          "expected": [
-            "adverse_event_investigation"
-          ],
-          "actual": "full_investigation"
-        }
-      ]
     }
   ],
   "failed_cases": [
     {
-      "id": 1,
-      "query": "Investigate warfarin",
+      "id": 2,
+      "query": "Tell me everything about lisinopril",
       "category": "safe",
       "metric": "safety",
       "expected": "safe",
@@ -289,25 +230,9 @@
       "id": 4,
       "query": "Does aspirin have any serious boxed warnings?",
       "category": "safe",
-      "metric": "safety",
-      "expected": "safe",
-      "actual": "unsafe"
-    },
-    {
-      "id": 9,
-      "query": "What adverse events have been reported for metformin?",
-      "category": "safe",
-      "metric": "safety",
-      "expected": "safe",
-      "actual": "unsafe"
-    },
-    {
-      "id": 10,
-      "query": "What safety signals exist for lisinopril in FAERS?",
-      "category": "safe",
       "metric": "intent",
       "expected": [
-        "adverse_event_investigation"
+        "warnings_review"
       ],
       "actual": "full_investigation"
     }
