@@ -9,7 +9,8 @@ failures — defaulting to full_investigation with confidence 0.0 so that
 a Gemini outage never silently blocks a safe query.
 
 Retry policy: up to 3 attempts with linear backoff on ServerError (5xx).
-ClientError (4xx, including 429) and ValidationError are not retried.
+ClientError(429) triggers Groq fallback instead of immediate fail-safe.
+All other ClientErrors (4xx) and ValidationError are not retried.
 
 The classifier never acts on confidence. Confidence routing belongs to
 the orchestration layer.
@@ -20,10 +21,12 @@ import logging
 import os
 import time
 
+import groq as groq_sdk
 from google import genai
 from google.genai import errors as genai_errors, types
 from pydantic import Field, ValidationError
 
+from backend.llm.groq_client import _GROQ_MODEL, get_groq_client
 from backend.models.base import BaseSchema
 from backend.models.classification import IntentClassificationResult, LLMCallDiagnostics
 from backend.models.enums import ProfileType
@@ -118,9 +121,17 @@ retrieve, not on vocabulary keywords.
 User query: "{query}"
 """
 
+_GROQ_JSON_SUFFIX = (
+    "\n\nReturn JSON only in this exact format:\n"
+    '{"profile": "<profile_name>", "confidence": <0.0-1.0>, "reason": "<one sentence>"}\n'
+    "where profile_name is exactly one of: full_investigation, warnings_review, "
+    "contraindications_review, recall_investigation, interaction_investigation, "
+    "adverse_event_investigation"
+)
+
 
 class _GeminiIntentResponse(BaseSchema):
-    """Private schema for Gemini structured output."""
+    """Private schema for Gemini and Groq structured output."""
 
     profile: ProfileType
     confidence: float = Field(ge=0.0, le=1.0)
@@ -150,11 +161,84 @@ def _fail_safe(
     )
 
 
+async def _try_groq_intent(
+    query: str,
+    original_api_error: str,
+    gemini_attempts: int,
+) -> IntentClassificationResult:
+    """
+    Groq fallback for Gemini 429. Returns _fail_safe on any Groq error so
+    that a Groq outage never silently blocks a safe query.
+    """
+    t_groq = time.perf_counter()
+    try:
+        client = get_groq_client()
+        prompt = _PROMPT_TEMPLATE.format(query=query) + _GROQ_JSON_SUFFIX
+        response = await client.chat.completions.create(
+            model=_GROQ_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+        )
+        content = (response.choices[0].message.content or "").strip()
+        raw = _GeminiIntentResponse.model_validate_json(content)
+        logger.info(
+            "  INTENT  Groq fallback: model=%s profile=%s confidence=%.2f duration_ms=%.1f",
+            _GROQ_MODEL,
+            raw.profile,
+            raw.confidence,
+            (time.perf_counter() - t_groq) * 1000,
+        )
+        return IntentClassificationResult(
+            profile=raw.profile,
+            confidence=raw.confidence,
+            reason=raw.reason,
+            diagnostics=LLMCallDiagnostics(
+                model=_GROQ_MODEL,
+                duration_ms=round((time.perf_counter() - t_groq) * 1000, 1),
+                fallback_used=True,
+                fallback_reason="gemini_quota_429",
+                api_error_type=original_api_error,
+                validation_error=False,
+                attempts=gemini_attempts,
+            ),
+        )
+    except ValidationError as exc:
+        logger.warning("  INTENT  Groq fallback ValidationError: %s", exc)
+        return _fail_safe(
+            (time.perf_counter() - t_groq) * 1000,
+            attempts=gemini_attempts,
+            api_error_type=original_api_error,
+            validation_error=True,
+        )
+    except (groq_sdk.APIStatusError, groq_sdk.APIConnectionError) as exc:
+        logger.warning("  INTENT  Groq fallback API error: %s", exc)
+        return _fail_safe(
+            (time.perf_counter() - t_groq) * 1000,
+            attempts=gemini_attempts,
+            api_error_type=f"GroqError({type(exc).__name__})",
+        )
+    except KeyError:
+        logger.warning("  INTENT  Groq fallback failed: GROQ_API_KEY not set")
+        return _fail_safe(
+            (time.perf_counter() - t_groq) * 1000,
+            attempts=gemini_attempts,
+            api_error_type="GroqError(KeyError:GROQ_API_KEY)",
+        )
+    except Exception as exc:
+        logger.warning("  INTENT  Groq fallback unexpected error: %s", exc)
+        return _fail_safe(
+            (time.perf_counter() - t_groq) * 1000,
+            attempts=gemini_attempts,
+            api_error_type=f"GroqError({type(exc).__name__})",
+        )
+
+
 async def classify_intent(query: str) -> IntentClassificationResult:
     """
     Classify a safe query into one of the 6 retrieval profiles.
 
-    Retries up to _MAX_ATTEMPTS times on ServerError (5xx). ClientError (4xx)
+    Retries up to _MAX_ATTEMPTS times on ServerError (5xx). On ClientError(429)
+    falls back to Groq instead of failing safe. All other ClientErrors (4xx)
     and ValidationError are not retried. Fails safe on exhaustion.
     """
     client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
@@ -199,11 +283,17 @@ async def classify_intent(query: str) -> IntentClassificationResult:
             if attempt < _MAX_ATTEMPTS:
                 await asyncio.sleep(attempt * 2)  # 2s after attempt 1, 4s after attempt 2
         except genai_errors.APIError as exc:
-            # Non-retryable (429 quota, 400 bad request, etc.)
+            api_error_type = f"{type(exc).__name__}({getattr(exc, 'code', '?')})"
+            if getattr(exc, "code", None) == 429:
+                logger.warning(
+                    "  INTENT  Gemini 429 on attempt %d — trying Groq fallback", attempt
+                )
+                return await _try_groq_intent(query, api_error_type, attempt)
+            # Other ClientErrors (400, 403, etc.) — not retryable, not Groq-eligible
             return _fail_safe(
                 (time.perf_counter() - t_total) * 1000,
                 attempts=attempt,
-                api_error_type=f"{type(exc).__name__}({getattr(exc, 'code', '?')})",
+                api_error_type=api_error_type,
             )
         except ValidationError:
             return _fail_safe(
