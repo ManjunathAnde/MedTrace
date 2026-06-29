@@ -17,6 +17,7 @@ import os
 import time
 
 import groq as groq_sdk
+import httpx
 from google import genai
 from google.genai import errors as genai_errors, types
 from pydantic import ValidationError
@@ -36,6 +37,7 @@ MAX_INTERACTIONS = 3
 MAX_RECALLS = 5
 MAX_ADVERSE_EVENTS = 10
 MAX_LABEL_SECTION_CHARS = 1200
+TRANSIENT_GEMINI_STATUS_CODES = {408, 429, 500, 502, 503, 504}
 
 logger = logging.getLogger(__name__)
 
@@ -250,6 +252,10 @@ def _build_prompt(evidence: MedicationEvidence) -> str:
     )
 
 
+def _is_transient_gemini_api_error(exc: genai_errors.APIError) -> bool:
+    return getattr(exc, "code", None) in TRANSIENT_GEMINI_STATUS_CODES
+
+
 def _assemble_report(evidence: MedicationEvidence, raw: _GeminiReportContent) -> MedicationReport:
     """
     Shared assembly step — Gemini and Groq paths converge here after
@@ -274,7 +280,7 @@ def _assemble_report(evidence: MedicationEvidence, raw: _GeminiReportContent) ->
 
 async def _try_groq_report(evidence: MedicationEvidence) -> MedicationReport:
     """
-    Groq fallback for Gemini 429. Builds the prompt independently via
+    Groq fallback for Gemini provider failures. Builds the prompt independently via
     _build_prompt() — same template and evidence serialization as the Gemini
     path. Returns _fail_safe on any Groq error so that a Groq outage never
     raises to the caller.
@@ -337,8 +343,8 @@ async def generate_report(evidence: MedicationEvidence) -> MedicationReport:
     Analyze structured medication evidence and return a MedicationReport.
 
     Condenses evidence before serialization so that both the Gemini and Groq
-    paths receive a prompt within their token budgets. On Gemini ClientError(429)
-    falls back to Groq. All other API errors and validation failures return
+    paths receive a prompt within their token budgets. On transient Gemini
+    provider failures, falls back to Groq. Validation failures return
     _fail_safe so that LLM unavailability never raises to the caller.
     """
     evidence = _condense_for_llm(evidence)
@@ -364,9 +370,13 @@ async def generate_report(evidence: MedicationEvidence) -> MedicationReport:
         return _assemble_report(evidence, raw)
     except genai_errors.APIError as exc:
         api_error_type = f"{type(exc).__name__}({getattr(exc, 'code', '?')})"
-        if getattr(exc, "code", None) == 429:
+        if _is_transient_gemini_api_error(exc):
             logger.warning(
-                "  RISK_ANALYST Gemini 429 — trying Groq fallback primary_provider=gemini"
+                "  RISK_ANALYST Gemini provider failure detected primary_provider=gemini error=%s",
+                api_error_type,
+            )
+            logger.warning(
+                "  RISK_ANALYST Attempting Groq fallback primary_provider=gemini"
             )
             return await _try_groq_report(evidence)
         logger.warning(
@@ -374,6 +384,16 @@ async def generate_report(evidence: MedicationEvidence) -> MedicationReport:
             api_error_type,
         )
         return _fail_safe(evidence)
+    except (httpx.TimeoutException, httpx.ConnectError) as exc:
+        logger.warning(
+            "  RISK_ANALYST Gemini provider failure detected primary_provider=gemini error=%s: %s",
+            type(exc).__name__,
+            exc,
+        )
+        logger.warning(
+            "  RISK_ANALYST Attempting Groq fallback primary_provider=gemini"
+        )
+        return await _try_groq_report(evidence)
     except ValidationError as exc:
         logger.warning(
             "  RISK_ANALYST Gemini ValidationError primary_provider=gemini fallback_provider=fail_safe: %s",
