@@ -5,6 +5,8 @@ import type { InvestigationResponse } from "../api/investigate";
 
 export type { InvestigationResponse };
 
+const MIN_SUCCESS_LOADING_MS = 2000;
+
 export type InvestigationError = {
   status?: number;
   title: string;
@@ -35,6 +37,10 @@ function messageForStatus(status?: number): InvestigationError {
   };
 }
 
+function wait(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
 export function useInvestigation() {
   const [query, setQuery] = useState("");
   const [report, setReport] = useState<InvestigationResponse | null>(null);
@@ -49,14 +55,19 @@ export function useInvestigation() {
     setLoading(true);
     setError(null);
     setReport(null);
+    const startedAt = window.performance.now();
 
     try {
       const payload = await investigateRequest(trimmed);
+      const remainingLoadingTime = MIN_SUCCESS_LOADING_MS - (window.performance.now() - startedAt);
+      if (remainingLoadingTime > 0) {
+        await wait(remainingLoadingTime);
+      }
       setReport(payload);
+      setLoading(false);
     } catch (caught) {
       const status = axios.isAxiosError(caught) ? caught.response?.status : undefined;
       setError(messageForStatus(status));
-    } finally {
       setLoading(false);
     }
   }, []);

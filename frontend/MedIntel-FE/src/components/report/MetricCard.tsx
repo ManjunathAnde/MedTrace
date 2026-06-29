@@ -17,10 +17,10 @@ const tones = {
 
 export function MetricCard({ label, value, icon: Icon, tone }: MetricCardProps) {
   return (
-    <div className={cn("rounded-xl border p-4", tones[tone])}>
-      <Icon size={22} />
-      <div className="mt-3 text-2xl font-bold">{value}</div>
-      <div className="text-sm font-semibold">{label}</div>
+    <div className={cn("flex h-32 min-w-0 flex-col items-center justify-center rounded-xl border p-4 text-center", tones[tone])}>
+      <Icon size={22} className="shrink-0" />
+      <div className="mt-3 text-2xl font-bold leading-none">{value}</div>
+      <div className="mt-2 max-w-full whitespace-normal break-words text-sm font-semibold leading-tight">{label}</div>
     </div>
   );
 }
