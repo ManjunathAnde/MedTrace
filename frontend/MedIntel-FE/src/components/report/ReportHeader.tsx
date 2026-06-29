@@ -25,7 +25,7 @@ export function ReportHeader({ report }: { report: ReportViewModel }) {
           </div>
         </div>
       </div>
-      <Button variant="outline" disabled>
+      <Button variant="outline" disabled title="PDF export is not implemented yet">
         <Download size={17} />
         Download Report
       </Button>

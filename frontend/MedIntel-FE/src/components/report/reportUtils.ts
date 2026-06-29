@@ -1,6 +1,8 @@
 import { asArray, pickNumber, pickString, titleCase } from "../../lib/utils";
 import { InvestigationResponse } from "../../hooks/useInvestigation";
 
+export const SYNTHESIS_UNAVAILABLE_SUMMARY = "Report generation temporarily unavailable";
+
 export type ReportSectionKey =
   | "summary"
   | "warnings"
@@ -25,6 +27,8 @@ export type ReportViewModel = {
   recalls: unknown[];
   sources: unknown[];
   limitations: unknown[];
+  isSynthesisUnavailable: boolean;
+  completenessValue?: number;
 };
 
 function sectionArray(data: InvestigationResponse, keys: string[]) {
@@ -42,6 +46,16 @@ function nestedString(data: InvestigationResponse, key: string, nestedKeys: stri
   return "";
 }
 
+function formatCompletenessScore(score?: number, fallback = "Not provided") {
+  if (score === undefined) return fallback;
+  return score <= 1 ? `${Math.round(score * 100)}%` : `${score}%`;
+}
+
+function limitationContradictsCompleteRetrieval(limitation: unknown) {
+  const text = renderValue(limitation).toLowerCase();
+  return text.includes("source") && text.includes("unavailable");
+}
+
 export function createReportView(data: InvestigationResponse): ReportViewModel {
   const duration = pickString(data, ["investigation_duration", "investigationDuration", "duration", "elapsed_time"], "");
   const score = pickNumber(data, ["completeness_score", "completenessScore", "score"]);
@@ -51,16 +65,18 @@ export function createReportView(data: InvestigationResponse): ReportViewModel {
   const interactions = sectionArray(data, ["interactions", "drug_interactions", "drugInteractions"]);
   const adverseEvents = sectionArray(data, ["adverse_events", "adverseEvents", "events"]);
   const recalls = sectionArray(data, ["recalls", "fda_recalls", "fdaRecalls"]);
-  const sources = sectionArray(data, ["sources", "data_sources", "dataSources"]);
-  const limitations = sectionArray(data, ["limitations", "limits", "caveats"]);
+  const sources = sectionArray(data, ["sources_used", "sourcesUsed", "sources", "data_sources", "dataSources"]);
+  const rawLimitations = sectionArray(data, ["limitations", "limits", "caveats"]);
+  const limitations = score === 1 ? rawLimitations.filter((item) => !limitationContradictsCompleteRetrieval(item)) : rawLimitations;
+  const summary = pickString(data, ["summary", "ai_summary", "aiSummary", "risk_summary"], nestedString(data, "report", ["summary", "ai_summary"]) || "No narrative summary was returned by the API.");
 
   return {
     raw: data,
     drugName: pickString(data, ["drug_name", "drugName", "medication", "name", "query"], "Medication"),
-    profileUsed: pickString(data, ["profile_used", "profileUsed", "profile"], "Full Investigation"),
-    completenessScore: score !== undefined ? `${score}${score <= 1 ? "" : "%"}` : pickString(data, ["completeness_score", "completenessScore"], "Not provided"),
+    profileUsed: titleCase(pickString(data, ["profile_used", "profileUsed", "profile"], "Full Investigation")),
+    completenessScore: formatCompletenessScore(score, pickString(data, ["completeness_score", "completenessScore"], "Not provided")),
     duration: duration || undefined,
-    summary: pickString(data, ["summary", "ai_summary", "aiSummary", "risk_summary"], nestedString(data, "report", ["summary", "ai_summary"]) || "No narrative summary was returned by the API."),
+    summary,
     keyFindings: sectionArray(data, ["key_findings", "keyFindings", "findings"]),
     warnings,
     contraindications,
@@ -69,6 +85,8 @@ export function createReportView(data: InvestigationResponse): ReportViewModel {
     recalls,
     sources,
     limitations,
+    isSynthesisUnavailable: summary === SYNTHESIS_UNAVAILABLE_SUMMARY,
+    completenessValue: score,
   };
 }
 

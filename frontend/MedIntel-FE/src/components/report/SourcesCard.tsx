@@ -4,8 +4,18 @@ import { itemTitle, renderValue } from "./reportUtils";
 
 const fallbackSources = ["RxNorm", "DailyMed", "FDA Recall", "OpenFDA"];
 
+function uniqueSources(sources: unknown[]) {
+  const seen = new Set<string>();
+  return sources.filter((source) => {
+    const key = itemTitle(source, String(source)).trim().toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export function SourcesCard({ sources, compact = false }: { sources: unknown[]; compact?: boolean }) {
-  const sourceList = sources.length ? sources : fallbackSources;
+  const sourceList = uniqueSources(sources.length ? sources : fallbackSources);
 
   return (
     <Card className={compact ? "p-5" : "p-6"}>
@@ -13,7 +23,7 @@ export function SourcesCard({ sources, compact = false }: { sources: unknown[]; 
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
           <Database size={19} />
         </div>
-        <h3 className="font-bold text-slate-950 dark:text-slate-50">Data Sources{sources.length ? ` (${sources.length})` : ""}</h3>
+        <h3 className="font-bold text-slate-950 dark:text-slate-50">Data Sources{sourceList.length ? ` (${sourceList.length})` : ""}</h3>
       </div>
       <div className="space-y-3">
         {sourceList.map((source, index) => (
