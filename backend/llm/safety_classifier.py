@@ -6,8 +6,8 @@ API errors, network failures, and response validation failures so that genuine
 Gemini unavailability never permits an unsafe query through.
 
 Retry policy: up to 3 attempts with linear backoff on ServerError (5xx).
-ClientError(429) triggers Groq fallback instead of immediate fail-closed.
-All other ClientErrors (4xx) and ValidationError are not retried.
+Transient Gemini provider failures trigger Groq fallback instead of immediate
+fail-closed. All other ClientErrors (4xx) and ValidationError are not retried.
 """
 
 import asyncio
@@ -20,7 +20,13 @@ from google import genai
 from google.genai import errors as genai_errors, types
 from pydantic import ValidationError
 
-from backend.llm.groq_client import _GROQ_MODEL, get_groq_client
+from backend.llm.groq_client import (
+    _GROQ_MODEL,
+    TRANSIENT_GEMINI_NETWORK_ERRORS,
+    gemini_fallback_reason,
+    get_groq_client,
+    is_transient_gemini_error,
+)
 from backend.models.base import BaseSchema
 from backend.models.classification import LLMCallDiagnostics, SafetyClassificationResult
 from backend.models.enums import SafetyClassifierType, SafetyDecision
@@ -278,8 +284,9 @@ def _fail_closed(
     attempts: int,
     api_error_type: str | None = None,
     validation_error: bool = False,
+    fallback_reason: str | None = None,
 ) -> SafetyClassificationResult:
-    fallback_reason = "validation_error" if validation_error else "api_error"
+    fallback_reason = fallback_reason or ("validation_error" if validation_error else "api_error")
     return SafetyClassificationResult(
         decision=SafetyDecision.UNSAFE,
         reason="safety_classifier_unavailable",
@@ -300,10 +307,12 @@ async def _try_groq_safety(
     query: str,
     original_api_error: str,
     gemini_attempts: int,
+    fallback_reason: str,
 ) -> SafetyClassificationResult:
     """
-    Groq fallback for Gemini 429. Returns _fail_closed on any Groq error so
-    that a Groq outage never permits an unsafe query through.
+    Groq fallback for transient Gemini provider failures. Returns
+    _fail_closed on any Groq error so that a Groq outage never permits an
+    unsafe query through.
     """
     t_groq = time.perf_counter()
     try:
@@ -330,7 +339,7 @@ async def _try_groq_safety(
                 model=_GROQ_MODEL,
                 duration_ms=round((time.perf_counter() - t_groq) * 1000, 1),
                 fallback_used=True,
-                fallback_reason="gemini_quota_429",
+                fallback_reason=fallback_reason,
                 api_error_type=original_api_error,
                 validation_error=False,
                 attempts=gemini_attempts,
@@ -343,6 +352,7 @@ async def _try_groq_safety(
             attempts=gemini_attempts,
             api_error_type=original_api_error,
             validation_error=True,
+            fallback_reason=fallback_reason,
         )
     except (groq_sdk.APIStatusError, groq_sdk.APIConnectionError) as exc:
         logger.warning("  SAFETY Groq fallback API error: %s", exc)
@@ -350,6 +360,7 @@ async def _try_groq_safety(
             (time.perf_counter() - t_groq) * 1000,
             attempts=gemini_attempts,
             api_error_type=f"GroqError({type(exc).__name__})",
+            fallback_reason=fallback_reason,
         )
     except KeyError:
         logger.warning("  SAFETY Groq fallback failed: GROQ_API_KEY not set")
@@ -357,6 +368,7 @@ async def _try_groq_safety(
             (time.perf_counter() - t_groq) * 1000,
             attempts=gemini_attempts,
             api_error_type="GroqError(KeyError:GROQ_API_KEY)",
+            fallback_reason=fallback_reason,
         )
     except Exception as exc:
         logger.warning("  SAFETY Groq fallback unexpected error: %s", exc)
@@ -364,6 +376,7 @@ async def _try_groq_safety(
             (time.perf_counter() - t_groq) * 1000,
             attempts=gemini_attempts,
             api_error_type=f"GroqError({type(exc).__name__})",
+            fallback_reason=fallback_reason,
         )
 
 
@@ -371,9 +384,9 @@ async def classify_safety(query: str) -> SafetyClassificationResult:
     """
     Classify a query using Gemini structured output.
 
-    Retries up to _MAX_ATTEMPTS times on ServerError (5xx). On ClientError(429)
-    falls back to Groq instead of failing closed. All other ClientErrors (4xx)
-    and ValidationError are not retried. Fails closed on exhaustion.
+    Retries up to _MAX_ATTEMPTS times on ServerError (5xx). Transient Gemini
+    provider failures fall back to Groq instead of failing closed. All other
+    ClientErrors (4xx) and ValidationError are not retried.
     """
     client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
     prompt = _PROMPT_TEMPLATE.format(query=query)
@@ -416,19 +429,42 @@ async def classify_safety(query: str) -> SafetyClassificationResult:
             )
             if attempt < _MAX_ATTEMPTS:
                 await asyncio.sleep(attempt * 2)  # 2s after attempt 1, 4s after attempt 2
+            elif is_transient_gemini_error(exc):
+                fallback_reason = gemini_fallback_reason(exc)
+                logger.warning(
+                    "  SAFETY Gemini provider failure detected after %d attempts: %s",
+                    attempt,
+                    last_error_type,
+                )
+                logger.warning("  SAFETY Attempting Groq fallback")
+                return await _try_groq_safety(query, last_error_type, attempt, fallback_reason)
         except genai_errors.APIError as exc:
             api_error_type = f"{type(exc).__name__}({getattr(exc, 'code', '?')})"
-            if getattr(exc, "code", None) == 429:
+            if is_transient_gemini_error(exc):
+                fallback_reason = gemini_fallback_reason(exc)
                 logger.warning(
-                    "  SAFETY Gemini 429 on attempt %d — trying Groq fallback", attempt
+                    "  SAFETY Gemini provider failure detected on attempt %d: %s",
+                    attempt,
+                    api_error_type,
                 )
-                return await _try_groq_safety(query, api_error_type, attempt)
+                logger.warning("  SAFETY Attempting Groq fallback")
+                return await _try_groq_safety(query, api_error_type, attempt, fallback_reason)
             # Other ClientErrors (400, 403, etc.) — not retryable, not Groq-eligible
             return _fail_closed(
                 (time.perf_counter() - t_total) * 1000,
                 attempts=attempt,
                 api_error_type=api_error_type,
             )
+        except TRANSIENT_GEMINI_NETWORK_ERRORS as exc:
+            api_error_type = type(exc).__name__
+            fallback_reason = gemini_fallback_reason(exc)
+            logger.warning(
+                "  SAFETY Gemini provider failure detected on attempt %d: %s",
+                attempt,
+                api_error_type,
+            )
+            logger.warning("  SAFETY Attempting Groq fallback")
+            return await _try_groq_safety(query, api_error_type, attempt, fallback_reason)
         except ValidationError:
             return _fail_closed(
                 (time.perf_counter() - t_total) * 1000,

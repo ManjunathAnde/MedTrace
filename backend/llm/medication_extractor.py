@@ -8,8 +8,8 @@ Fails safe: returns the raw query on Gemini failure so RxNorm can attempt
 resolution directly. The caller handles RxNormDrugNotFoundError if it fails.
 
 Retry policy: up to 3 attempts with linear backoff on ServerError (5xx).
-ClientError(429) triggers Groq fallback instead of immediate fail-safe.
-All other ClientErrors (4xx) are not retried.
+Transient Gemini provider failures trigger Groq fallback instead of immediate
+fail-safe. All other ClientErrors (4xx) are not retried.
 """
 
 import asyncio
@@ -21,7 +21,13 @@ import groq as groq_sdk
 from google import genai
 from google.genai import errors as genai_errors, types
 
-from backend.llm.groq_client import _GROQ_MODEL, get_groq_client
+from backend.llm.groq_client import (
+    _GROQ_MODEL,
+    TRANSIENT_GEMINI_NETWORK_ERRORS,
+    gemini_fallback_reason,
+    get_groq_client,
+    is_transient_gemini_error,
+)
 
 _MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
 _MAX_ATTEMPTS = 3
@@ -50,10 +56,11 @@ async def _try_groq_extract(
     query: str,
     original_api_error: str,
     gemini_attempts: int,
+    fallback_reason: str,
 ) -> str:
     """
-    Groq fallback for Gemini 429. Returns raw query on any Groq error so
-    RxNorm can attempt resolution directly.
+    Groq fallback for transient Gemini provider failures. Returns raw query on
+    any Groq error so RxNorm can attempt resolution directly.
     """
     t_groq = time.perf_counter()
     try:
@@ -73,9 +80,10 @@ async def _try_groq_extract(
         result = extracted if extracted else query
         duration_ms = round((time.perf_counter() - t_groq) * 1000, 1)
         logger.info(
-            "  EXTRACT Groq fallback: model=%s duration_ms=%.1f result=%r",
+            "  EXTRACT Groq fallback: model=%s duration_ms=%.1f fallback_reason=%s result=%r",
             _GROQ_MODEL,
             duration_ms,
+            fallback_reason,
             result,
         )
         return result
@@ -98,9 +106,9 @@ async def extract_medication(query: str) -> str:
     """
     Extract the primary medication name from a natural language query.
 
-    Retries up to _MAX_ATTEMPTS times on ServerError (5xx). On ClientError(429)
-    falls back to Groq. Fails safe by returning the raw query if all attempts
-    fail, allowing RxNorm to attempt resolution directly.
+    Retries up to _MAX_ATTEMPTS times on ServerError (5xx). Transient Gemini
+    provider failures fall back to Groq. Fails safe by returning the raw query
+    if all attempts fail, allowing RxNorm to attempt resolution directly.
     """
     client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
     prompt = _PROMPT_TEMPLATE.format(query=query)
@@ -135,13 +143,26 @@ async def extract_medication(query: str) -> str:
             )
             if attempt < _MAX_ATTEMPTS:
                 await asyncio.sleep(attempt * 2)
+            elif is_transient_gemini_error(exc):
+                fallback_reason = gemini_fallback_reason(exc)
+                logger.warning(
+                    "  EXTRACT Gemini provider failure detected after %d attempts: %s",
+                    attempt,
+                    error_type,
+                )
+                logger.warning("  EXTRACT Attempting Groq fallback")
+                return await _try_groq_extract(query, error_type, attempt, fallback_reason)
         except genai_errors.APIError as exc:
             api_error_type = f"{type(exc).__name__}({getattr(exc, 'code', '?')})"
-            if getattr(exc, "code", None) == 429:
+            if is_transient_gemini_error(exc):
+                fallback_reason = gemini_fallback_reason(exc)
                 logger.warning(
-                    "  EXTRACT Gemini 429 on attempt %d — trying Groq fallback", attempt
+                    "  EXTRACT Gemini provider failure detected on attempt %d: %s",
+                    attempt,
+                    api_error_type,
                 )
-                return await _try_groq_extract(query, api_error_type, attempt)
+                logger.warning("  EXTRACT Attempting Groq fallback")
+                return await _try_groq_extract(query, api_error_type, attempt, fallback_reason)
             # Other ClientErrors — fail safe immediately
             duration_ms = round((time.perf_counter() - t_total) * 1000, 1)
             logger.warning(
@@ -152,6 +173,16 @@ async def extract_medication(query: str) -> str:
                 api_error_type,
             )
             return query
+        except TRANSIENT_GEMINI_NETWORK_ERRORS as exc:
+            api_error_type = type(exc).__name__
+            fallback_reason = gemini_fallback_reason(exc)
+            logger.warning(
+                "  EXTRACT Gemini provider failure detected on attempt %d: %s",
+                attempt,
+                api_error_type,
+            )
+            logger.warning("  EXTRACT Attempting Groq fallback")
+            return await _try_groq_extract(query, api_error_type, attempt, fallback_reason)
 
     duration_ms = round((time.perf_counter() - t_total) * 1000, 1)
     logger.warning(
