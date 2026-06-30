@@ -72,7 +72,7 @@ function RotatingFactDisplay() {
       className="mt-5 min-h-40 rounded-lg border border-emerald-100 bg-white/70 p-4 dark:border-emerald-900/50 dark:bg-slate-950/50"
       aria-live="polite"
     >
-      <p className="text-sm font-semibold uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-300">AI report generation</p>
+      <p className="text-sm font-semibold uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-300">AI Report generation is underway</p>
       <p className="mt-3 text-base leading-7 text-slate-700 dark:text-slate-200">{visibleText}</p>
     </motion.div>
   );
