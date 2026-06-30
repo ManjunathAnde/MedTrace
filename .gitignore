@@ -32,3 +32,21 @@ node_modules/
 frontend/dist/
 frontend/build/
 frontend/.env
+
+# Logs
+*.log
+backend-dev.err.log
+backend-dev.log
+backend-live.log
+frontend-dev.err.log
+frontend-dev.log
+frontend-static.err.log
+frontend-static.log
+frontend-vite-live.log
+frontend-vite.err.log
+warfarin-validation.err.log
+warfarin-validation.log
+
+# Internal docs
+CLAUDE.md
+Read.md
