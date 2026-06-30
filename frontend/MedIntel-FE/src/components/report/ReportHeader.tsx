@@ -1,6 +1,5 @@
 import { motion } from "framer-motion";
-import { Download, Pill, ShieldCheck } from "lucide-react";
-import { Button } from "../ui/Button";
+import { Pill, ShieldCheck } from "lucide-react";
 import { ReportViewModel } from "./reportUtils";
 
 export function ReportHeader({ report }: { report: ReportViewModel }) {
@@ -21,14 +20,9 @@ export function ReportHeader({ report }: { report: ReportViewModel }) {
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-600 dark:text-slate-300">
             <span>Profile Used: {report.profileUsed}</span>
             <span>Completeness Score: {report.completenessScore}</span>
-            {report.duration && <span>Completed in {report.duration}</span>}
           </div>
         </div>
       </div>
-      <Button variant="outline" disabled title="PDF export is not implemented yet">
-        <Download size={17} />
-        Download Report
-      </Button>
     </motion.div>
   );
 }

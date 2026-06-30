@@ -1,4 +1,4 @@
-import { Clock3, Gauge, Pill, ShieldPlus } from "lucide-react";
+import { Gauge, Pill, ShieldPlus } from "lucide-react";
 import { Card } from "../Card";
 import { SourcesCard } from "./SourcesCard";
 import { ReportViewModel } from "./reportUtils";
@@ -29,7 +29,6 @@ export function InfoPanel({ report }: { report: ReportViewModel }) {
           <Detail label="Medication" value={report.drugName} icon={Pill} />
           <Detail label="Profile Used" value={report.profileUsed} icon={ShieldPlus} />
           <Detail label="Completeness Score" value={report.completenessScore} icon={Gauge} />
-          <Detail label="Duration" value={report.duration} icon={Clock3} />
         </div>
       </Card>
       <SourcesCard sources={report.sources} compact />
