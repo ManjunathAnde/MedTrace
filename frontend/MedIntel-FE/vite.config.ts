@@ -7,7 +7,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/investigate": {
-        target: "http://127.0.0.1:8000",
+        target: "https://med-intel-backend-803800925462.us-central1.run.app",
         changeOrigin: true,
       },
     },
