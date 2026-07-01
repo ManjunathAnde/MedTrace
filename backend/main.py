@@ -4,6 +4,7 @@ load_dotenv()
 import logging
 import time
 
+from cachetools import TTLCache
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -24,6 +25,14 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+CACHE_VERSION = "v1"
+REPORT_CACHE_TTL_SECONDS = 72 * 60 * 60  # 72 hours
+FAIL_SAFE_REPORT_SUMMARY = "Report generation temporarily unavailable"
+_report_cache = TTLCache(
+    maxsize=200,
+    ttl=REPORT_CACHE_TTL_SECONDS,
+)
 
 app = FastAPI(title="Medication Intelligence Agent")
 
@@ -70,6 +79,13 @@ async def investigate(request: InvestigateRequest) -> MedicationReport:
     # Stage 4: Profile routing
     profile = resolve_profile(intent)
 
+    cache_key = f"{CACHE_VERSION}:{drug_name.lower()}:{profile.value}"
+    if cache_key in _report_cache:
+        logger.info("CACHE HIT: %s", cache_key)
+        return _report_cache[cache_key]
+
+    logger.info("CACHE MISS: %s", cache_key)
+
     # Stage 5: Evidence collection
     try:
         evidence = await PROFILES[profile](drug_name)
@@ -100,6 +116,8 @@ async def investigate(request: InvestigateRequest) -> MedicationReport:
         duration_ms,
     )
 
+    if report.summary != FAIL_SAFE_REPORT_SUMMARY:
+        _report_cache[cache_key] = report
     return report
 
 
