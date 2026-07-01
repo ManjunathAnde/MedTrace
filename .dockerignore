@@ -1,0 +1,52 @@
+# VCS and local tooling
+.git
+.agents
+.claude
+.vscode
+.idea
+
+# Secrets and local environment files
+.env
+.env.*
+!.env.example
+frontend/.env
+frontend/MedIntel-FE/.env
+
+# Python cache and local virtual environments
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+venv/
+.venv/
+env/
+
+# Local logs and generated validation output
+*.log
+backend-dev.err.log
+backend-dev.log
+backend-live.log
+frontend-dev.err.log
+frontend-dev.log
+frontend-static.err.log
+frontend-static.log
+frontend-vite-live.log
+frontend-vite.err.log
+warfarin-validation.err.log
+warfarin-validation.log
+
+# Frontend is not deployed in the Cloud Run backend image
+frontend/MedIntel-FE/node_modules/
+frontend/MedIntel-FE/dist/
+frontend/MedIntel-FE/build/
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+
+# Backend-only deployment does not need evaluation artifacts
+backend/evaluation/
+
+# Local docs not required at runtime
+CLAUDE.md
+Read.md
