@@ -4,13 +4,18 @@ load_dotenv()
 import logging
 import time
 
-from cachetools import TTLCache
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from backend.apis.rxnorm import RxNormDrugNotFoundError, RxNormError
+from backend.cache.report_cache import (
+    build_cache_key,
+    close_report_cache,
+    get_cached_report,
+    store_cached_report,
+)
 from backend.core.router import resolve_profile
 from backend.llm.intent_classifier import classify_intent
 from backend.llm.medication_extractor import extract_medication
@@ -26,13 +31,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-CACHE_VERSION = "v1"
-REPORT_CACHE_TTL_SECONDS = 72 * 60 * 60  # 72 hours
 FAIL_SAFE_REPORT_SUMMARY = "Report generation temporarily unavailable"
-_report_cache = TTLCache(
-    maxsize=200,
-    ttl=REPORT_CACHE_TTL_SECONDS,
-)
 
 app = FastAPI(title="Medication Intelligence Agent")
 
@@ -79,12 +78,10 @@ async def investigate(request: InvestigateRequest) -> MedicationReport:
     # Stage 4: Profile routing
     profile = resolve_profile(intent)
 
-    cache_key = f"{CACHE_VERSION}:{drug_name.lower()}:{profile.value}"
-    if cache_key in _report_cache:
-        logger.info("CACHE HIT: %s", cache_key)
-        return _report_cache[cache_key]
-
-    logger.info("CACHE MISS: %s", cache_key)
+    cache_key = build_cache_key(drug_name, profile)
+    cached_report = await get_cached_report(cache_key)
+    if cached_report is not None:
+        return cached_report
 
     # Stage 5: Evidence collection
     try:
@@ -116,9 +113,16 @@ async def investigate(request: InvestigateRequest) -> MedicationReport:
         duration_ms,
     )
 
+    # TODO: Replace summary-string detection if report generation exposes an explicit
+    # success/fail-safe flag. The current MedicationReport schema has no such field.
     if report.summary != FAIL_SAFE_REPORT_SUMMARY:
-        _report_cache[cache_key] = report
+        await store_cached_report(cache_key, profile, report)
     return report
+
+
+@app.on_event("shutdown")
+async def shutdown_report_cache():
+    await close_report_cache()
 
 
 @app.get("/health")
