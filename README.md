@@ -15,7 +15,7 @@ MedTrace was built around a different philosophy:
 
 > **Authoritative APIs retrieve the facts. AI explains the facts.**
 
-This significantly reduces hallucination risk while still providing natural-language summaries that are easier to understand than raw FDA documentation.
+The LLM never generates medication facts from its own training data. It only classifies intent and summarizes evidence that was already retrieved from RxNorm, DailyMed, and OpenFDA. If the evidence retrieval fails or returns nothing, the LLM has nothing to hallucinate from, it just reports incomplete data.
 
 ---
 
@@ -132,15 +132,17 @@ This makes each component easier to validate, debug, and improve independently.
 
 ---
 
-### Graceful Failure
+## Failover
+The risk analysis stage has explicit failure handling. If Gemini fails (rate limits, timeouts, server errors), the request automatically retries on Groq. If Groq also fails, the module returns a fail-safe report instead of crashing.
+ 
+Medication identity resolution through RxNorm is a hard dependency: if RxNorm is unavailable, the request returns an error rather than continuing with an unverified medication. This is intentional. A wrong medication identity makes the rest of the report meaningless, so failing loud here is safer than failing silent.
 
-External AI providers occasionally fail due to rate limits or service outages.
+Other degradation behavior:
+- Unsafe medical advice requests are rejected before any retrieval happens
+- Missing optional evidence sources (DailyMed, OpenFDA) reduce report completeness rather than aborting the investigation
+- Cached investigations skip external calls entirely (see Caching section for limitations on Render's free tier)
 
-To improve reliability:
-
-- Gemini serves as the primary provider.
-- Groq automatically handles transient provider failures.
-- Module-specific fail-safe behavior prevents total request failure.
+The system does not catch every exception globally. Bugs and unexpected errors surface as request failures rather than being silently swallowed, which keeps real problems visible instead of masked behind a fake success response.
 
 ---
 
