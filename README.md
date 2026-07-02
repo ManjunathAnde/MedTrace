@@ -131,6 +131,28 @@ Instead of one large prompt, the system separates responsibilities into independ
 This makes each component easier to validate, debug, and improve independently.
 
 ---
+## ⚡ Intelligent Caching
+
+To minimize repeated API calls and LLM inference, MedTrace caches **successful investigation reports** using **Upstash Redis**.
+
+Redis was chosen over an in-memory cache because the backend is hosted on **Render**, whose free-tier instances may spin down after periods of inactivity. Since Redis lives independently of the application process, cached investigations survive cold starts and remain available across deployments.
+
+### Profile-Aware Cache Policy
+
+Instead of assigning every investigation the same lifetime, cache duration is determined by the freshness requirements of the underlying medical data.
+
+| Investigation Profile | Cache TTL | Why? |
+| :-------------------- | :-------: | :--- |
+| 🔍 **Full Investigation** | **12 hours** | Includes FDA recall data, which is the most time-sensitive evidence source. |
+| 🚨 **Recall Investigation** | **12 hours** | Recall information is safety-critical and updated more frequently than other datasets. |
+| 📊 **Adverse Event Investigation** | **30 days** | OpenFDA FAERS data is released quarterly, making a 30-day cache well within the source's update cycle. |
+| ⚠️ **Warnings Review** | **30 days** | Drug label warnings rarely change after approval. |
+| ⛔ **Contraindications Review** | **30 days** | Contraindications are part of the approved FDA labeling and change infrequently. |
+| 🔄 **Interaction Investigation** | **30 days** | Uses interaction information derived from drug labels rather than a continuously updated interaction database. |
+
+Caching is treated purely as a **performance optimization**.
+
+If Redis is unavailable, times out, or serialization fails, MedTrace simply performs the full investigation pipeline and returns a fresh report. A cache failure can never prevent an investigation from completing.
 
 ## Failover
 The risk analysis stage has explicit failure handling. If Gemini fails (rate limits, timeouts, server errors), the request automatically retries on Groq. If Groq also fails, the module returns a fail-safe report instead of crashing.
@@ -159,19 +181,6 @@ Example profiles include:
 - Contraindications Review
 - Recall Investigation
 - Adverse Event Investigation
-
----
-
-### Intelligent Caching
-
-Successful investigations are cached for 72 hours using an in-memory TTL cache.
-Repeated investigations for the same medication bypass:
-
-- External API retrieval
-- Evidence aggregation
-- AI report generation
-
-This significantly reduces response time and API usage.
 
 ---
 
