@@ -164,8 +164,6 @@ Other degradation behavior:
 - Missing optional evidence sources (DailyMed, OpenFDA) reduce report completeness rather than aborting the investigation
 - Cached investigations skip external calls entirely (see Caching section for limitations on Render's free tier)
 
-The system does not catch every exception globally. Bugs and unexpected errors surface as request failures rather than being silently swallowed, which keeps real problems visible instead of masked behind a fake success response.
-
 ---
 
 ### Retrieval Profiles
