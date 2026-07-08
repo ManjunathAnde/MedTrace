@@ -1,7 +1,7 @@
 # 💊 MedTrace
 ### AI-Powered Medication Intelligence Platform
 
-🔗 **[Live link ]([https://main.dy43b2jej051.amplifyapp.com](https://med-trace-liart.vercel.app/))** | **[GitHub](https://github.com/ManjunathAnde/MedTrace)** | **[LinkedIn](https://www.linkedin.com/in/manjunath-ande/)**
+🔗 **[Live link ](https://med-trace-liart.vercel.app/)** | **[GitHub](https://github.com/ManjunathAnde/MedTrace)** | **[LinkedIn](https://www.linkedin.com/in/manjunath-ande/)**
 ---
 MedTrace is an AI-assisted medication investigation platform that combines deterministic medical evidence retrieval with structured LLM reasoning to generate evidence-grounded medication safety reports.
 
