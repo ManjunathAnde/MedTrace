@@ -115,7 +115,9 @@ def title_tier(title: str, typed_name: str, single_ingredient: bool) -> int:
     word = rf"{re.escape(typed_name)}\b"
     starts = re.match(word, title, re.IGNORECASE) is not None
     is_combination = " AND " in title.upper()
-    if starts and not (single_ingredient and is_combination):
+    # Multi-product SPLs list one "(ingredient)" group per product before "[labeler]".
+    is_single_product = title.split("[")[0].count("(") <= 1
+    if starts and is_single_product and not (single_ingredient and is_combination):
         return 1
     if starts:
         return 2
