@@ -1,6 +1,8 @@
 """
 Integrity checks for benchmark/questions.jsonl against the frozen label snapshot
-(PROJECT.md Section 13). Pure: reads two committed files, no network.
+(PROJECT.md Section 13). Pure: reads two local files, no network.
+
+benchmark/ is gitignored and local-only, so the module skips when it is absent.
 """
 
 import json
@@ -11,6 +13,9 @@ from pathlib import Path
 import pytest
 
 BENCHMARK = Path(__file__).resolve().parent.parent / "benchmark"
+if not (BENCHMARK / "questions.jsonl").is_file() or not (BENCHMARK / "label_snapshot.json").is_file():
+    pytest.skip("benchmark/ is local-only and not present", allow_module_level=True)
+
 QUESTIONS = [
     json.loads(line)
     for line in (BENCHMARK / "questions.jsonl").read_text(encoding="utf-8").splitlines()
