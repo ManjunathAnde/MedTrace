@@ -55,3 +55,7 @@ Read.md
 PROJECT.md
 DECISIONS.md
 docs/
+
+benchmark/results/scratch/
+
+benchmark/
