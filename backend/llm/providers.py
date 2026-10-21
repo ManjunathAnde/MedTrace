@@ -34,6 +34,19 @@ PROVIDER_ORDER: tuple[Provider, ...] = ("gemini", "groq")
 
 # Groq's output-token limit on the current tier (1000/min); one call must stay under it.
 GROQ_MAX_OUTPUT_TOKENS = 1000
+
+# Per-call output budgets for one Ask request. The small helpers stay small so
+# the synthesizer gets the rest of Groq's 1000 output tokens/min. Safety needs
+# 128: Gemini's one-sentence safety_reason truncated the JSON at 64 (measured).
+SAFETY_MAX_OUTPUT_TOKENS = 128
+EXTRACTION_MAX_OUTPUT_TOKENS = 96
+INTENT_MAX_OUTPUT_TOKENS = 96
+SYNTHESIZER_MAX_OUTPUT_TOKENS = (
+    GROQ_MAX_OUTPUT_TOKENS
+    - SAFETY_MAX_OUTPUT_TOKENS
+    - EXTRACTION_MAX_OUTPUT_TOKENS
+    - INTENT_MAX_OUTPUT_TOKENS
+)
 _ATTEMPTS_PER_PROVIDER = 2  # first call + one retry on invalid JSON / schema mismatch
 
 T = TypeVar("T", bound=BaseModel)

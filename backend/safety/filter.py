@@ -13,12 +13,20 @@ Stage 2 — Gemini fallback: called only on Stage 1 miss.
 Public interface: async check_safety(query) -> SafetyClassificationResult
 """
 
+import logging
 import re
 from dataclasses import dataclass
 
 from backend.llm.safety_classifier import classify_safety
-from backend.models.classification import SafetyClassificationResult
-from backend.models.enums import SafetyClassifierType, SafetyDecision
+from backend.models.classification import SafetyClassificationResult, Wall1Result
+from backend.models.enums import (
+    SafetyCategory,
+    SafetyClassifierType,
+    SafetyDecision,
+    Wall1Action,
+)
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -118,3 +126,50 @@ async def check_safety(query: str) -> SafetyClassificationResult:
                 )
 
     return await classify_safety(query)
+
+
+# --- v2 wall 1 (PROJECT.md Section 5.1) ---
+# Replaces the v1 rules above once /investigate is rewired (check_safety stays
+# until then). Rules only block or escalate, never clear. Checked in this order.
+
+_WALL1_SELF_HARM = ("kill myself", "want to die", "end my life", "commit suicide")
+_WALL1_PERSONAL_ADVICE = (
+    "how much should i give my",
+    "how much should i take",
+    "what dose for my",
+    "should i take",
+    "should i stop",
+    "what medication should",
+    "recommend me",
+    "is it safe for me",
+    "do i need",
+)
+_WALL1_ESCALATE = ("overdose", "lethal", "how many pills", "fatal dose")
+
+
+def _phrase_pattern(phrase: str) -> re.Pattern[str]:
+    # Whole words, case-insensitive, any run of whitespace between words.
+    words = r"\s+".join(re.escape(word) for word in phrase.split())
+    return re.compile(rf"\b{words}\b", re.IGNORECASE)
+
+
+_WALL1_RULES: list[tuple[Wall1Action, SafetyCategory | None, tuple[str, ...]]] = [
+    (Wall1Action.BLOCK, SafetyCategory.SELF_HARM_RISK, _WALL1_SELF_HARM),
+    (Wall1Action.BLOCK, SafetyCategory.PERSONAL_ADVICE, _WALL1_PERSONAL_ADVICE),
+    (Wall1Action.ESCALATE, None, _WALL1_ESCALATE),
+]
+_WALL1_PATTERNS = [
+    (action, category, phrase, _phrase_pattern(phrase))
+    for action, category, phrases in _WALL1_RULES
+    for phrase in phrases
+]
+
+
+def check_wall1(query: str) -> Wall1Result:
+    """Wall 1 rule filter: BLOCK (with category), ESCALATE, or PASS to wall 2."""
+    for action, category, phrase, pattern in _WALL1_PATTERNS:
+        if pattern.search(query):
+            logger.info("wall1 %s category=%s matched=%r", action.value,
+                        category.value if category else None, phrase)
+            return Wall1Result(action=action, category=category, matched=phrase)
+    return Wall1Result(action=Wall1Action.PASS, category=None, matched=None)

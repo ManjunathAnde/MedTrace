@@ -6,8 +6,12 @@ import pytest
 from pydantic import BaseModel
 
 from backend.llm.providers import (
+    EXTRACTION_MAX_OUTPUT_TOKENS,
     GROQ_MAX_OUTPUT_TOKENS,
+    INTENT_MAX_OUTPUT_TOKENS,
     PROVIDER_ORDER,
+    SAFETY_MAX_OUTPUT_TOKENS,
+    SYNTHESIZER_MAX_OUTPUT_TOKENS,
     complete_json,
     groq_request_params,
 )
@@ -45,3 +49,15 @@ def test_groq_prompt_names_json_and_carries_schema():
 def test_max_output_tokens_outside_limit_rejected_before_any_call(tokens):
     with pytest.raises(ValueError):
         asyncio.run(complete_json("Say ok.", _Answer, tokens))
+
+
+def test_ask_request_budgets_fit_groq_output_limit():
+    budgets = [
+        SAFETY_MAX_OUTPUT_TOKENS,
+        EXTRACTION_MAX_OUTPUT_TOKENS,
+        INTENT_MAX_OUTPUT_TOKENS,
+        SYNTHESIZER_MAX_OUTPUT_TOKENS,
+    ]
+    assert all(b > 0 for b in budgets)
+    assert sum(budgets) <= GROQ_MAX_OUTPUT_TOKENS
+    assert SYNTHESIZER_MAX_OUTPUT_TOKENS > max(budgets[:3])
