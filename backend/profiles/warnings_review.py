@@ -22,7 +22,7 @@ async def run(medication_name: str) -> MedicationEvidence:
     successful: list[str] = []
     failed: list[str] = []
 
-    label = await _call_dailymed(identity.rxcui, successful, failed)
+    label = await _call_dailymed(identity, successful, failed)
 
     return MedicationEvidence(
         profile_used=ProfileType.WARNINGS_REVIEW,

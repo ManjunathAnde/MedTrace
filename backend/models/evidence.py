@@ -36,7 +36,15 @@ class DrugIdentity(BaseSchema):
 
 
 class LabelEvidence(BaseSchema):
+    label_title: str
+    set_id: str
+    effective_date: str | None  # YYYY-MM-DD from OpenFDA effective_time
+    url: str
+    tie_breaker: int = Field(ge=1, le=4)  # PROJECT.md Section 5.4 rule that picked the label
+    skipped_set_ids: list[str]  # SPLs skipped because OpenFDA had no label
     boxed_warnings: list[str]
+    indications_and_usage: list[str]
+    dosage_and_administration: list[str]
     contraindications: list[str]
     precautions: list[str]
     drug_interactions: list[str]

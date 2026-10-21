@@ -229,6 +229,9 @@ def _condense_for_llm(evidence: MedicationEvidence) -> MedicationEvidence:
                 _truncate_at_word_boundary(item)
                 for item in label.drug_interactions[:MAX_INTERACTIONS]
             ],
+            # v1 report never used these sections; kept out to leave the v1 prompt unchanged
+            "indications_and_usage": [],
+            "dosage_and_administration": [],
         })
         updates["label_evidence"] = condensed_label
 

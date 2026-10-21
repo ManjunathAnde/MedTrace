@@ -17,6 +17,7 @@ from backend.apis.fda_recall import FDARecallServiceError, fetch_recall_evidence
 from backend.apis.openfda import OpenFDAServiceError, fetch_adverse_event_evidence
 from backend.models.evidence import (
     AdverseEventEvidence,
+    DrugIdentity,
     EvidenceMetadata,
     LabelEvidence,
     MedicationEvidence,
@@ -48,13 +49,15 @@ def _build_metadata(
 # Return the evidence object on success, None on any failure.
 # No source-list side effects — safe to use inside asyncio.gather.
 
-async def _fetch_label_safe(rxcui: str | None) -> LabelEvidence | None:
+async def _fetch_label_safe(identity: DrugIdentity) -> LabelEvidence | None:
     # rxcui=None means RxNorm resolved the drug but not to a specific concept;
     # DailyMed cannot be called without a valid rxcui.
-    if rxcui is None:
+    if identity.rxcui is None:
         return None
     try:
-        return await fetch_label_evidence(rxcui)
+        return await fetch_label_evidence(
+            identity.rxcui, identity.input_name, len(identity.ingredients) == 1
+        )
     except DailyMedError:
         return None
 
@@ -82,11 +85,11 @@ async def _fetch_adverse_safe(search_name: str) -> AdverseEventEvidence | None:
 # record the outcome in the caller's source-tracking lists.
 
 async def _call_dailymed(
-    rxcui: str | None,
+    identity: DrugIdentity,
     successful: list[str],
     failed: list[str],
 ) -> LabelEvidence | None:
-    result = await _fetch_label_safe(rxcui)
+    result = await _fetch_label_safe(identity)
     (successful if result is not None else failed).append("DailyMed")
     return result
 
@@ -112,7 +115,7 @@ async def _call_openfda(
 
 
 async def _gather_full_investigation(
-    rxcui: str | None,
+    identity: DrugIdentity,
     search_name: str,
     successful: list[str],
     failed: list[str],
@@ -130,7 +133,7 @@ async def _gather_full_investigation(
     completion order so results are deterministic across executions.
     """
     label, recall, aes = await asyncio.gather(
-        _fetch_label_safe(rxcui),
+        _fetch_label_safe(identity),
         _fetch_recall_safe(search_name),
         _fetch_adverse_safe(search_name),
     )
