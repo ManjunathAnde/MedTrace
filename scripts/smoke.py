@@ -11,9 +11,12 @@ Usage:
 
 import asyncio
 import json
+import os
 import sys
-
 from datetime import datetime, timezone
+
+from dotenv import load_dotenv
+from pydantic import BaseModel
 
 from backend.apis.dailymed import fetch_label_evidence
 from backend.apis.fda_recall import fetch_recall_evidence
@@ -30,6 +33,7 @@ from backend.evidence.store import (
     build_label_items,
     build_recall_items,
 )
+from backend.llm.providers import ProvidersUnavailableError, complete_json
 
 FAERS_DISCLAIMER = "FAERS reports do not establish that the drug caused the event."
 
@@ -150,6 +154,60 @@ async def check_evidence_full(drug_name: str) -> bool:
     return not problems
 
 
+class _SmokeAnswer(BaseModel):
+    word: str
+
+
+_SMOKE_PROMPT = 'Reply with a JSON object whose "word" field is the lowercase word "ok".'
+
+
+async def check_provider_call() -> bool:
+    """CP3: one real complete_json call; prints which provider answered."""
+    result, provider = await complete_json(_SMOKE_PROMPT, _SmokeAnswer, 50)
+    print(json.dumps({"provider": provider, "result": result.model_dump()}))
+    return result.word.strip().lower() == "ok"
+
+
+class _InvalidKeys:
+    """Replace the named API keys for the duration of a check; restore after."""
+
+    def __init__(self, *names: str):
+        self.names = names
+        self.saved: dict[str, str | None] = {}
+
+    def __enter__(self):
+        self.saved = {name: os.environ.get(name) for name in self.names}
+        for name in self.names:
+            os.environ[name] = "invalid-key-for-smoke"
+
+    def __exit__(self, *exc_info):
+        for name, value in self.saved.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+
+
+async def check_groq_fallback_with_invalid_gemini_key() -> bool:
+    """CP3: Gemini key invalid -> Groq answers (exercises the Groq call parameters)."""
+    with _InvalidKeys("GOOGLE_API_KEY"):
+        result, provider = await complete_json(_SMOKE_PROMPT, _SmokeAnswer, 50)
+    print(json.dumps({"provider": provider, "result": result.model_dump()}))
+    return provider == "groq" and result.word.strip().lower() == "ok"
+
+
+async def check_providers_unavailable_with_invalid_keys() -> bool:
+    """CP3: invalid keys on both providers -> ProvidersUnavailableError (never a result)."""
+    with _InvalidKeys("GOOGLE_API_KEY", "GROQ_API_KEY"):
+        try:
+            result, provider = await complete_json(_SMOKE_PROMPT, _SmokeAnswer, 50)
+        except ProvidersUnavailableError as exc:
+            print(f"ProvidersUnavailableError: {exc}")
+            return True
+    print(json.dumps({"unexpected": provider, "result": result.model_dump()}))
+    return False
+
+
 CHECKS = [
     ("cp1 rxnorm: 'omeprazole' -> omeprazole, not esomeprazole",
      lambda: check_rxnorm_resolves("omeprazole", "7646", "omeprazole")),
@@ -183,10 +241,17 @@ CHECKS = [
          lambda name=name: check_evidence_full(name))
         for name in ("warfarin", "metformin", "Ozempic", "tramadol", "Tylenol PM")
     ],
+    ("cp3 providers: real complete_json call returns validated JSON",
+     check_provider_call),
+    ("cp3 providers: invalid Gemini key -> Groq fallback answers",
+     check_groq_fallback_with_invalid_gemini_key),
+    ("cp3 providers: invalid keys on both providers -> ProvidersUnavailableError",
+     check_providers_unavailable_with_invalid_keys),
 ]
 
 
 async def main() -> int:
+    load_dotenv()  # LLM keys and models, read by providers at call time
     failures = 0
     for label, run in CHECKS:
         print(f"\n=== {label}")
