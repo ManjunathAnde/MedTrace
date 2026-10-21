@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import Field
 
@@ -83,3 +84,24 @@ class MedicationEvidence(BaseSchema):
     adverse_event_evidence: AdverseEventEvidence | None
     interaction_evidence: InteractionEvidence | None
     metadata: EvidenceMetadata
+
+
+EvidenceSource = Literal["dailymed_label", "openfda_recall", "faers", "absence"]
+
+
+class EvidenceItem(BaseSchema):
+    """One passage the LLM may cite (PROJECT.md Section 6)."""
+
+    id: str  # "E1".. per request, shown to LLM; "" until the store assigns it
+    internal_id: str  # sha1(source|set_id|section|chunk_index|text)[:12]
+    product: str
+    ingredient: str | None  # FAERS and recall items
+    rxcui: str
+    source: EvidenceSource
+    section: str
+    text: str = Field(max_length=600)
+    url: str
+    label_title: str | None
+    label_set_id: str | None
+    label_effective_date: str | None
+    retrieved_at: str  # ISO 8601 UTC
