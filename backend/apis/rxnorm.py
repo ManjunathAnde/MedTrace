@@ -45,25 +45,43 @@ async def _get_rxcui_candidates(
     return response.json().get("idGroup", {}).get("rxnormId") or []
 
 
-async def _resolve_rxcui(
-    client: httpx.AsyncClient, candidates: list[str]
+def select_rxcui(
+    input_name: str, candidates: list[tuple[str, str | None, str | None]]
 ) -> str:
-    # Multi-match resolution:
-    # Prefer exact ingredient (tty=IN) concept if present in results.
-    # Fall back to first result if no exact ingredient match found.
+    """
+    Pick one rxcui from (rxcui, name, tty) candidates, in this order:
+      1. RxNorm name equals the input (case-insensitive)
+      2. first tty=IN
+      3. first candidate
+    name/tty are None when the properties call failed.
+    """
+    target = input_name.strip().lower()
+    for rxcui, name, _ in candidates:
+        if name is not None and name.strip().lower() == target:
+            return rxcui
+    for rxcui, _, tty in candidates:
+        if tty == "IN":
+            return rxcui
+    return candidates[0][0]
+
+
+async def _resolve_rxcui(
+    client: httpx.AsyncClient, candidates: list[str], input_name: str
+) -> str:
     if len(candidates) == 1:
         return candidates[0]
 
+    described: list[tuple[str, str | None, str | None]] = []
     for rxcui in candidates:
         try:
             response = await client.get(f"{_BASE_URL}/rxcui/{rxcui}/properties.json")
             response.raise_for_status()
-            if response.json().get("properties", {}).get("tty") == "IN":
-                return rxcui
+            properties = response.json().get("properties", {})
+            described.append((rxcui, properties.get("name"), properties.get("tty")))
         except (httpx.HTTPStatusError, httpx.RequestError):
-            continue
+            described.append((rxcui, None, None))
 
-    return candidates[0]
+    return select_rxcui(input_name, described)
 
 
 async def _get_preferred_name(
@@ -128,7 +146,7 @@ async def fetch_drug_identity(drug_name: str) -> DrugIdentity:
                 f"Drug not recognized by RxNorm: '{drug_name}'"
             )
 
-        rxcui = await _resolve_rxcui(client, candidates)
+        rxcui = await _resolve_rxcui(client, candidates, drug_name.strip())
 
         # normalized_name = canonical RxNorm preferred term for this concept
         # input_name      = exactly what the user typed
