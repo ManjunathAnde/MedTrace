@@ -32,6 +32,19 @@ async def check_rxnorm_not_found(drug_name: str) -> bool:
     return False
 
 
+async def check_rxnorm_brands(drug_name: str, required: set[str], excluded: set[str]) -> bool:
+    identity = await fetch_drug_identity(drug_name)
+    print(json.dumps(identity.model_dump(), indent=2))
+    brands = set(identity.brand_names)
+    return required <= brands and not (excluded & brands)
+
+
+async def check_rxnorm_ingredients(drug_name: str, expected: set[str]) -> bool:
+    identity = await fetch_drug_identity(drug_name)
+    print(json.dumps(identity.model_dump(), indent=2))
+    return {name.lower() for name in identity.ingredients} == expected
+
+
 CHECKS = [
     ("cp1 rxnorm: 'omeprazole' -> omeprazole, not esomeprazole",
      lambda: check_rxnorm_resolves("omeprazole", "7646", "omeprazole")),
@@ -41,6 +54,14 @@ CHECKS = [
      lambda: check_rxnorm_not_found("Zorvaxitran")),
     ("cp1 rxnorm: 'Warfarin' resolves to warfarin",
      lambda: check_rxnorm_resolves("Warfarin", "11289", "warfarin")),
+    ("cp1 rxnorm: omeprazole brands keep Prilosec, exclude combination brands",
+     lambda: check_rxnorm_brands(
+         "omeprazole",
+         required={"Prilosec"},
+         excluded={"Yosprala", "Talicia", "Konvomep", "Zegerid Reformulated Aug 2006"},
+     )),
+    ("cp1 rxnorm: 'Tylenol PM' -> acetaminophen + diphenhydramine",
+     lambda: check_rxnorm_ingredients("Tylenol PM", {"acetaminophen", "diphenhydramine"})),
 ]
 
 

@@ -31,6 +31,7 @@ class DrugIdentity(BaseSchema):
     normalized_name: str
     generic_name: str | None
     rxcui: str | None
+    ingredients: list[str]
     brand_names: list[str]
 
 
