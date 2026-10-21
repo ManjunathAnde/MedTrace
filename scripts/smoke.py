@@ -13,8 +13,25 @@ import asyncio
 import json
 import sys
 
+from datetime import datetime, timezone
+
 from backend.apis.dailymed import fetch_label_evidence
+from backend.apis.fda_recall import fetch_recall_evidence
+from backend.apis.openfda import fetch_adverse_event_evidence
 from backend.apis.rxnorm import RxNormDrugNotFoundError, fetch_drug_identity
+from backend.evidence.store import (
+    FAERS_TOP_REACTIONS_FULL,
+    LABEL_SECTIONS,
+    MAX_CHUNK_CHARS,
+    MAX_EVIDENCE_ITEMS,
+    RECALLS_FULL,
+    assemble_evidence,
+    build_faers_items,
+    build_label_items,
+    build_recall_items,
+)
+
+FAERS_DISCLAIMER = "FAERS reports do not establish that the drug caused the event."
 
 
 async def check_rxnorm_resolves(drug_name: str, expected_rxcui: str, expected_name: str) -> bool:
@@ -73,6 +90,66 @@ async def check_label(
     )
 
 
+def _item_problems(item) -> list[str]:
+    problems = []
+    for field in ("id", "internal_id", "product", "rxcui", "source", "section", "text", "url", "retrieved_at"):
+        if not getattr(item, field):
+            problems.append(f"{item.id}: empty {field}")
+    if len(item.text) > MAX_CHUNK_CHARS:
+        problems.append(f"{item.id}: text over {MAX_CHUNK_CHARS}")
+    if item.source == "dailymed_label" and not (item.label_title and item.label_set_id and item.label_effective_date):
+        problems.append(f"{item.id}: label item missing label metadata")
+    if item.source in ("faers", "openfda_recall") and not item.ingredient:
+        problems.append(f"{item.id}: {item.source} item missing ingredient")
+    if item.source == "faers" and not item.text.endswith(FAERS_DISCLAIMER):
+        problems.append(f"{item.id}: FAERS item missing disclaimer")
+    return problems
+
+
+async def check_evidence_full(drug_name: str) -> bool:
+    """CP2: Full-intent evidence for one drug; every field present, cap and order hold."""
+    retrieved_at = datetime.now(timezone.utc).isoformat()
+    identity = await fetch_drug_identity(drug_name)
+    label = await fetch_label_evidence(
+        identity.rxcui, identity.input_name, len(identity.ingredients) == 1
+    )
+    product = identity.normalized_name
+    items = build_label_items(product, identity.rxcui, label, list(LABEL_SECTIONS), retrieved_at)
+    for ingredient in identity.ingredients:
+        faers = await fetch_adverse_event_evidence(ingredient)
+        recalls = await fetch_recall_evidence(ingredient)
+        items += build_faers_items(
+            product, identity.rxcui, ingredient, faers, FAERS_TOP_REACTIONS_FULL, retrieved_at
+        )
+        items += build_recall_items(
+            product, identity.rxcui, ingredient, recalls, RECALLS_FULL, retrieved_at
+        )
+    final = assemble_evidence(items)
+
+    problems = [p for item in final for p in _item_problems(item)]
+    if len(final) > MAX_EVIDENCE_ITEMS:
+        problems.append(f"{len(final)} items, over {MAX_EVIDENCE_ITEMS}")
+    if [i.id for i in final] != [f"E{n}" for n in range(1, len(final) + 1)]:
+        problems.append("E-IDs not sequential")
+    covered = {i.section for i in final if i.source in ("dailymed_label", "absence")}
+    problems += [f"label section {s} has no item" for s in LABEL_SECTIONS if s not in covered]
+    for ingredient in identity.ingredients:
+        sections = {i.section for i in final if i.ingredient == ingredient}
+        if not sections & {"faers_reaction", "faers_total", "faers"}:
+            problems.append(f"{ingredient}: no FAERS item")
+        if "recalls" not in sections:
+            problems.append(f"{ingredient}: no recall item")
+
+    print(f"label: {label.label_title} ({label.set_id}, tier {label.tie_breaker})")
+    print(f"built {len(items)} items -> kept {len(final)}")
+    for item in final:
+        print(f"  {item.id:>3} {item.source:<14} {item.section:<26} {item.ingredient or '':<16} {item.text[:70]!r}")
+    print(json.dumps(final[0].model_dump(), indent=2))
+    for problem in problems:
+        print(f"  PROBLEM: {problem}")
+    return not problems
+
+
 CHECKS = [
     ("cp1 rxnorm: 'omeprazole' -> omeprazole, not esomeprazole",
      lambda: check_rxnorm_resolves("omeprazole", "7646", "omeprazole")),
@@ -101,6 +178,11 @@ CHECKS = [
          "Ozempic", title_includes="INJECTION",
          set_id="42bdd912-2393-44c4-b7e0-47672ca28991",
      )),
+    *[
+        (f"cp2 evidence: '{name}' Full intent, all fields present, cap and order hold",
+         lambda name=name: check_evidence_full(name))
+        for name in ("warfarin", "metformin", "Ozempic", "tramadol", "Tylenol PM")
+    ],
 ]
 
 

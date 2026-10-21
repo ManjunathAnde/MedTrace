@@ -13,6 +13,7 @@ class RecallRecord(BaseSchema):
     classification: RecallClassification
     recall_date: datetime | None
     status: str
+    product_description: str
 
 
 class AdverseEvent(BaseSchema):
@@ -54,11 +55,13 @@ class LabelEvidence(BaseSchema):
 class RecallEvidence(BaseSchema):
     recalls: list[RecallRecord]
     total_count: int
+    query_url: str  # openFDA enforcement query, cited by recall evidence items
 
 
 class AdverseEventEvidence(BaseSchema):
     events: list[AdverseEvent]
     total_count: int
+    query_url: str  # openFDA FAERS count query, cited by FAERS evidence items
 
 
 class InteractionEvidence(BaseSchema):

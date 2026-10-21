@@ -27,6 +27,7 @@ _BASE_URL = "https://api.fda.gov/drug/event.json"
 _cache: TTLCache = TTLCache(maxsize=100, ttl=86400)
 
 MAX_ADVERSE_EVENTS = 100
+_REACTION_COUNT_FIELD = "patient.reaction.reactionmeddrapt.exact"
 
 
 class OpenFDAError(Exception):
@@ -61,7 +62,7 @@ async def _count_reactions(
             _BASE_URL,
             params={
                 "search": search,
-                "count": "patient.reaction.reactionmeddrapt.exact",
+                "count": _REACTION_COUNT_FIELD,
                 "limit": MAX_ADVERSE_EVENTS,
             },
         )
@@ -158,6 +159,10 @@ async def fetch_adverse_event_evidence(generic_name: str) -> AdverseEventEvidenc
     # openfda.generic_name aligns with the generic_name resolved by RxNorm and has
     # significantly better annotation coverage in FAERS than in enforcement records.
     base_search = f'patient.drug.openfda.generic_name:"{generic_name}"'
+    query_url = str(httpx.URL(
+        _BASE_URL,
+        params={"search": base_search, "count": _REACTION_COUNT_FIELD},
+    ))
 
     async with httpx.AsyncClient(timeout=8.0) as client:
         raw_terms, total_count, serious_terms = await asyncio.gather(
@@ -177,6 +182,8 @@ async def fetch_adverse_event_evidence(generic_name: str) -> AdverseEventEvidenc
     # Sort most-reported first so events[0] is always the top signal.
     events.sort(key=lambda e: e.count, reverse=True)
 
-    evidence = AdverseEventEvidence(events=events, total_count=total_count)
+    evidence = AdverseEventEvidence(
+        events=events, total_count=total_count, query_url=query_url
+    )
     _cache[cache_key] = evidence
     return evidence

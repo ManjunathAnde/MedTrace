@@ -13,11 +13,18 @@ from backend.models.evidence import (
     EvidenceItem,
     EvidenceSource,
     LabelEvidence,
+    RecallEvidence,
 )
 
 MAX_CHUNK_CHARS = 600
 MIN_CHUNK_CHARS = 20
+MAX_EVIDENCE_ITEMS = 20
+
+# Per ingredient (Section 6 sizing). The caller picks by intent.
+FAERS_TOP_REACTIONS_FULL = 3
 FAERS_TOP_REACTIONS = 10
+RECALLS_FULL = 2
+RECALLS = 3
 
 # Section 6 label sections, in evidence order.
 LABEL_SECTIONS: tuple[str, ...] = (
@@ -242,17 +249,18 @@ def build_faers_items(
     rxcui: str,
     ingredient: str,
     evidence: AdverseEventEvidence,
-    url: str,
+    top_reactions: int,
     retrieved_at: str,
 ) -> list[EvidenceItem]:
     """
-    Code-written FAERS items for one ingredient: top reactions plus the total,
-    each with the causation disclaimer; one absence item when there are none.
-    `url` is the openFDA query URL.
+    Code-written FAERS items for one ingredient: the top `top_reactions`
+    reactions plus the total, each with the causation disclaimer; one absence
+    item when there are none. url = the openFDA query URL.
     """
     date = retrieved_at[:10]
     common = dict(
-        product=product, rxcui=rxcui, ingredient=ingredient, url=url, retrieved_at=retrieved_at,
+        product=product, rxcui=rxcui, ingredient=ingredient,
+        url=evidence.query_url, retrieved_at=retrieved_at,
     )
     if not evidence.events and evidence.total_count == 0:
         return [_item(
@@ -267,7 +275,7 @@ def build_faers_items(
                 f"(retrieved {date}). {_FAERS_DISCLAIMER}"
             ),
         )
-        for index, event in enumerate(evidence.events[:FAERS_TOP_REACTIONS])
+        for index, event in enumerate(evidence.events[:top_reactions])
     ]
     items.append(_item(
         **common, source="faers", section="faers_total", chunk_index=0,
@@ -277,3 +285,110 @@ def build_faers_items(
         ),
     ))
     return items
+
+
+def _shorten(text: str, limit: int) -> str:
+    """Cut at the last space within `limit` and end with an ellipsis."""
+    if len(text) <= limit:
+        return text
+    cut = text.rfind(" ", 0, limit)
+    head = text[:cut] if cut > 0 else text[:limit - 1]
+    return head.rstrip() + "…"
+
+
+def _recall_text(record_number: str, classification: str, date: str, status: str,
+                 reason: str, product_description: str) -> str:
+    template = (
+        "FDA enforcement record {number}: {classification}, initiated {date}, status {status}. "
+        "Reason: {reason} Product: {product} "
+        "Note: matched on ingredient name; confirm the specific product."
+    )
+    fields = dict(number=record_number, classification=classification, date=date, status=status)
+    text = template.format(**fields, reason=reason, product=product_description)
+    if len(text) <= MAX_CHUNK_CHARS:
+        return text
+    # Over the limit: shorten reason and product (word boundary, ellipsis),
+    # giving any unused share of the budget to the other.
+    budget = MAX_CHUNK_CHARS - len(template.format(**fields, reason="", product=""))
+    half = budget // 2
+    if len(product_description) <= half:
+        reason = _shorten(reason, budget - len(product_description))
+    elif len(reason) <= half:
+        product_description = _shorten(product_description, budget - len(reason))
+    else:
+        reason = _shorten(reason, budget - half)
+        product_description = _shorten(product_description, half)
+    return template.format(**fields, reason=reason, product=product_description)
+
+
+def build_recall_items(
+    product: str,
+    rxcui: str,
+    ingredient: str,
+    evidence: RecallEvidence,
+    max_records: int,
+    retrieved_at: str,
+) -> list[EvidenceItem]:
+    """
+    Code-written recall items for one ingredient: the newest `max_records`
+    enforcement records (the client sorts newest first), or one absence item
+    when none matched. url = the openFDA enforcement query URL.
+    """
+    date = retrieved_at[:10]
+    common = dict(
+        product=product, rxcui=rxcui, ingredient=ingredient,
+        url=evidence.query_url, retrieved_at=retrieved_at,
+    )
+    if not evidence.recalls:
+        return [_item(
+            **common, source="absence", section="recalls", chunk_index=0,
+            text=f"No FDA enforcement records matched {ingredient} as of {date}.",
+        )]
+    return [
+        _item(
+            **common, source="openfda_recall", section="recalls", chunk_index=index,
+            text=_recall_text(
+                record.recall_number,
+                record.classification.value,
+                record.recall_date.strftime("%Y-%m-%d") if record.recall_date else "on an unknown date",
+                record.status,
+                record.reason,
+                record.product_description,
+            ),
+        )
+        for index, record in enumerate(evidence.recalls[:max_records])
+    ]
+
+
+_SOURCE_ORDER: dict[str, int] = {"dailymed_label": 0, "faers": 1, "openfda_recall": 2, "absence": 3}
+
+
+def assemble_evidence(items: list[EvidenceItem]) -> list[EvidenceItem]:
+    """
+    Final evidence list for one request (Section 6 limits and order):
+      - FAERS, recall and absence items are always kept
+      - label chunks fill the rest up to MAX_EVIDENCE_ITEMS, round-robin across
+        (section, product) groups so each section keeps its first chunks
+      - order: label sections in Section 6 order, FAERS, recalls, absence
+      - E-IDs E1..En assigned after ordering
+    """
+    label_items = [i for i in items if i.source == "dailymed_label"]
+    other_items = [i for i in items if i.source != "dailymed_label"]
+
+    groups: dict[tuple[str, str], list[EvidenceItem]] = {}
+    for item in label_items:
+        groups.setdefault((item.section, item.product), []).append(item)
+    ordered_keys = sorted(groups, key=lambda k: LABEL_SECTIONS.index(k[0]))  # stable: product order kept
+
+    budget = max(0, MAX_EVIDENCE_ITEMS - len(other_items))
+    kept_counts = {key: 0 for key in ordered_keys}
+    taken = 0
+    while taken < budget and any(kept_counts[k] < len(groups[k]) for k in ordered_keys):
+        for key in ordered_keys:
+            if taken < budget and kept_counts[key] < len(groups[key]):
+                kept_counts[key] += 1
+                taken += 1
+
+    kept_label = [item for key in ordered_keys for item in groups[key][:kept_counts[key]]]
+    ordered = kept_label + sorted(other_items, key=lambda i: _SOURCE_ORDER[i.source])
+    return [item.model_copy(update={"id": f"E{n}"}) for n, item in enumerate(ordered, start=1)]
