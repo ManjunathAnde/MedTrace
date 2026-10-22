@@ -1,0 +1,30 @@
+{
+  "source": "live 2026-10-22: no LLM call reached a provider",
+  "request": {
+    "query": "Should I stop taking my lisinopril?"
+  },
+  "http": 200,
+  "body": {
+    "version": "v2",
+    "status": "BLOCKED",
+    "message": "MedTrace provides FDA drug label information, not personal medical advice. Please talk to a pharmacist or doctor about your specific situation.",
+    "block_type": "PERSONAL_ADVICE",
+    "redirect": null,
+    "intent": null,
+    "drug": null,
+    "claims": [],
+    "claims_total": 0,
+    "claims_kept": 0,
+    "removed": [],
+    "gaps": [],
+    "evidence": {},
+    "meta": {
+      "latency_ms": 0,
+      "llm_calls": 0,
+      "verifier_provider": null,
+      "cache_hit": false,
+      "verified": false,
+      "synthesizer_provider": null
+    }
+  }
+}

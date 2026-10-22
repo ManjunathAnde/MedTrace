@@ -1,0 +1,132 @@
+{
+  "source": "captured live 2026-10-22 (groq)",
+  "request": {
+    "query": "Why does Ozempic have a boxed warning?"
+  },
+  "http": 200,
+  "body": {
+    "version": "v2",
+    "status": "ANSWERED",
+    "message": null,
+    "block_type": null,
+    "redirect": null,
+    "intent": "warnings",
+    "drug": {
+      "input_name": "Ozempic",
+      "rxcui": "1991307",
+      "preferred_name": "Ozempic",
+      "ingredients": [
+        "semaglutide"
+      ],
+      "label": {
+        "title": "OZEMPIC (SEMAGLUTIDE) INJECTION, SOLUTION [A-S MEDICATION SOLUTIONS]",
+        "set_id": "42bdd912-2393-44c4-b7e0-47672ca28991",
+        "effective_date": "2026-07-30",
+        "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=42bdd912-2393-44c4-b7e0-47672ca28991"
+      }
+    },
+    "claims": [
+      {
+        "text": "In rodents, semaglutide causes dose-dependent and treatment-duration-dependent thyroid C-cell tumors at clinically relevant exposures.",
+        "section": "boxed_warning",
+        "evidence_id": "E1",
+        "quote": "In rodents, semaglutide causes dose-dependent and treatment-duration-dependent thyroid C-cell tumors at clinically relevant exposures."
+      },
+      {
+        "text": "It is unknown whether OZEMPIC causes thyroid C-cell tumors, including medullary thyroid carcinoma (MTC), in humans.",
+        "section": "boxed_warning",
+        "evidence_id": "E2",
+        "quote": "It is unknown whether OZEMPIC causes thyroid C-cell tumors, including medullary thyroid carcinoma (MTC), in humans"
+      },
+      {
+        "text": "The human relevance of semaglutide-induced rodent thyroid C-cell tumors has not been determined.",
+        "section": "boxed_warning",
+        "evidence_id": "E2",
+        "quote": "human relevance of semaglutide-induced rodent thyroid C-cell tumors has not been determined"
+      },
+      {
+        "text": "OZEMPIC is contraindicated in patients with a personal or family history of MTC or in patients with Multiple Endocrine Neoplasia syndrome type 2 (MEN 2).",
+        "section": "boxed_warning",
+        "evidence_id": "E2",
+        "quote": "OZEMPIC is contraindicated in patients with a personal or family history of MTC or in patients with Multiple Endocrine Neoplasia syndrome type 2 (MEN 2)"
+      },
+      {
+        "text": "Patients should be counseled regarding the potential risk for MTC with the use of OZEMPIC.",
+        "section": "boxed_warning",
+        "evidence_id": "E3",
+        "quote": "Counsel patients regarding the potential risk for MTC with the use of OZEMPIC"
+      },
+      {
+        "text": "Patients should be informed of symptoms of thyroid tumors, such as a mass in the neck, dysphagia, dyspnea, and persistent hoarseness.",
+        "section": "boxed_warning",
+        "evidence_id": "E3",
+        "quote": "inform them of symptoms of thyroid tumors (e.g., a mass in the neck, dysphagia, dyspnea, persistent hoarseness)"
+      },
+      {
+        "text": "Routine monitoring of serum calcitonin or using thyroid ultrasound is of uncertain value for early detection of MTC in patients treated with OZEMPIC.",
+        "section": "boxed_warning",
+        "evidence_id": "E3",
+        "quote": "Routine monitoring of serum calcitonin or using thyroid ultrasound is of uncertain value for early detection of MTC"
+      }
+    ],
+    "claims_total": 7,
+    "claims_kept": 7,
+    "removed": [],
+    "gaps": [],
+    "evidence": {
+      "E1": {
+        "id": "E1",
+        "internal_id": "648085c24055",
+        "product": "Ozempic",
+        "ingredient": null,
+        "rxcui": "1991307",
+        "source": "dailymed_label",
+        "section": "boxed_warning",
+        "text": "WARNING: RISK OF THYROID C-CELL TUMORS \u2022 In rodents, semaglutide causes dose-dependent and treatment-duration-dependent thyroid C-cell tumors at clinically relevant exposures.",
+        "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=42bdd912-2393-44c4-b7e0-47672ca28991",
+        "label_title": "OZEMPIC (SEMAGLUTIDE) INJECTION, SOLUTION [A-S MEDICATION SOLUTIONS]",
+        "label_set_id": "42bdd912-2393-44c4-b7e0-47672ca28991",
+        "label_effective_date": "2026-07-30",
+        "retrieved_at": "2026-10-22T04:00:45.696736+00:00"
+      },
+      "E2": {
+        "id": "E2",
+        "internal_id": "9344492caac6",
+        "product": "Ozempic",
+        "ingredient": null,
+        "rxcui": "1991307",
+        "source": "dailymed_label",
+        "section": "boxed_warning",
+        "text": "It is unknown whether OZEMPIC causes thyroid C-cell tumors, including medullary thyroid carcinoma (MTC), in humans as human relevance of semaglutide-induced rodent thyroid C-cell tumors has not been determined [see Warnings and Precautions ( 5.1 ), Nonclinical Toxicology ( 13.1 )] . \u2022 OZEMPIC is contraindicated in patients with a personal or family history of MTC or in patients with Multiple Endocrine Neoplasia syndrome type 2 (MEN 2) [see Contraindications ( 4 )] .",
+        "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=42bdd912-2393-44c4-b7e0-47672ca28991",
+        "label_title": "OZEMPIC (SEMAGLUTIDE) INJECTION, SOLUTION [A-S MEDICATION SOLUTIONS]",
+        "label_set_id": "42bdd912-2393-44c4-b7e0-47672ca28991",
+        "label_effective_date": "2026-07-30",
+        "retrieved_at": "2026-10-22T04:00:45.696736+00:00"
+      },
+      "E3": {
+        "id": "E3",
+        "internal_id": "2aa4bc15c2fb",
+        "product": "Ozempic",
+        "ingredient": null,
+        "rxcui": "1991307",
+        "source": "dailymed_label",
+        "section": "boxed_warning",
+        "text": "Counsel patients regarding the potential risk for MTC with the use of OZEMPIC and inform them of symptoms of thyroid tumors (e.g., a mass in the neck, dysphagia, dyspnea, persistent hoarseness). Routine monitoring of serum calcitonin or using thyroid ultrasound is of uncertain value for early detection of MTC in patients treated with OZEMPIC [see Contraindications ( 4 ), Warnings and Precautions ( 5.1 )] . WARNING: RISK OF THYROID C-CELL TUMORS See full prescribing information for complete boxed warning. \u2022 In rodents, semaglutide causes thyroid C-cell tumors.",
+        "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=42bdd912-2393-44c4-b7e0-47672ca28991",
+        "label_title": "OZEMPIC (SEMAGLUTIDE) INJECTION, SOLUTION [A-S MEDICATION SOLUTIONS]",
+        "label_set_id": "42bdd912-2393-44c4-b7e0-47672ca28991",
+        "label_effective_date": "2026-07-30",
+        "retrieved_at": "2026-10-22T04:00:45.696736+00:00"
+      }
+    },
+    "meta": {
+      "latency_ms": 10764,
+      "llm_calls": 5,
+      "verifier_provider": "groq",
+      "cache_hit": false,
+      "verified": true,
+      "synthesizer_provider": "groq"
+    }
+  }
+}

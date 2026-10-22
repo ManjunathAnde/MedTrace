@@ -3,7 +3,12 @@ import { FormEvent, useState } from "react";
 import { Card } from "./Card";
 import { Button } from "./ui/Button";
 
-const chips = ["Warfarin", "Metformin", "Ozempic", "Lisinopril", "Aspirin"];
+// Popular searches: short label, full question sent.
+const chips = [
+  { label: "Warfarin boxed warnings", query: "What are the boxed warnings for warfarin?" },
+  { label: "Ozempic boxed warning", query: "Why does Ozempic have a boxed warning?" },
+  { label: "Ibuprofen + lisinopril", query: "Can I take ibuprofen with lisinopril?" },
+];
 const trustSources = ["RxNorm", "DailyMed", "FDA", "OpenFDA"];
 
 type SearchHeroProps = {
@@ -23,8 +28,10 @@ export function SearchHero({ onInvestigate, isLoading }: SearchHeroProps) {
     <Card className="relative overflow-hidden p-6 sm:p-8">
       <div className="medical-grid pointer-events-none absolute inset-y-0 right-0 w-1/2 opacity-70" />
       <div className="relative">
-        <h1 className="text-3xl font-bold tracking-normal text-emerald-950 dark:text-emerald-100 sm:text-4xl">Investigate a Medication</h1>
-        <p className="mt-3 max-w-2xl text-base text-slate-600 dark:text-slate-300">Get comprehensive, evidence-based insights from trusted healthcare sources.</p>
+        <h1 className="text-3xl font-bold tracking-normal text-emerald-950 dark:text-emerald-100 sm:text-4xl">Ask MedTrace</h1>
+        <p className="mt-3 max-w-2xl text-base text-slate-600 dark:text-slate-300">
+          Answers from FDA labels, for pharmacists and clinicians. Every claim is checked against the passage it cites.
+        </p>
 
         <form onSubmit={submit} className="mt-7 grid gap-4 xl:grid-cols-[1fr_220px]">
           <label className="relative block">
@@ -32,12 +39,12 @@ export function SearchHero({ onInvestigate, isLoading }: SearchHeroProps) {
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Investigate a medication..."
+              placeholder="Ask about one medication, e.g. What are the boxed warnings for warfarin?"
               className="h-14 w-full rounded-lg border border-border bg-white pl-14 pr-5 text-base text-slate-950 shadow-card outline-none transition placeholder:text-slate-400 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-600/10 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
             />
           </label>
           <Button type="submit" disabled={!query.trim() || isLoading} className="h-14 text-base">
-            Investigate <ArrowRight size={20} />
+            Ask <ArrowRight size={20} />
           </Button>
         </form>
 
@@ -55,15 +62,15 @@ export function SearchHero({ onInvestigate, isLoading }: SearchHeroProps) {
           <span className="text-slate-600 dark:text-slate-300">Popular searches:</span>
           {chips.map((chip) => (
             <button
-              key={chip}
+              key={chip.label}
               type="button"
               onClick={() => {
-                setQuery(chip);
-                onInvestigate(chip);
+                setQuery(chip.query);
+                onInvestigate(chip.query);
               }}
               className="rounded-full border border-emerald-200 bg-white px-4 py-1.5 font-medium text-emerald-800 transition hover:bg-emerald-50 dark:border-emerald-900/60 dark:bg-slate-950 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
             >
-              {chip}
+              {chip.label}
             </button>
           ))}
         </div>

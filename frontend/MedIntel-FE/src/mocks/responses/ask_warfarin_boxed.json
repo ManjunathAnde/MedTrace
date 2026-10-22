@@ -1,0 +1,84 @@
+{
+  "source": "replayed: real endpoint, LLM outputs from smoke_cp4.txt (2026-10-21)",
+  "request": {
+    "query": "What are the boxed warnings for warfarin?"
+  },
+  "http": 200,
+  "body": {
+    "version": "v2",
+    "status": "ANSWERED",
+    "message": null,
+    "block_type": null,
+    "redirect": null,
+    "intent": "warnings",
+    "drug": {
+      "input_name": "warfarin",
+      "rxcui": "11289",
+      "preferred_name": "warfarin",
+      "ingredients": [
+        "warfarin"
+      ],
+      "label": {
+        "title": "WARFARIN SODIUM TABLET [CARDINAL HEALTH 107, LLC]",
+        "set_id": "cdbbc317-35d3-42ba-94f0-c83891358529",
+        "effective_date": "2025-11-06",
+        "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=cdbbc317-35d3-42ba-94f0-c83891358529"
+      }
+    },
+    "claims": [
+      {
+        "text": "Warfarin sodium can cause major or fatal bleeding.",
+        "section": "boxed_warning",
+        "evidence_id": "E1",
+        "quote": "Warfarin sodium can cause major or fatal bleeding"
+      },
+      {
+        "text": "Regular monitoring of INR is required in all treated patients.",
+        "section": "boxed_warning",
+        "evidence_id": "E1",
+        "quote": "Perform regular monitoring of INR in all treated patients"
+      },
+      {
+        "text": "Drugs, dietary changes, and other factors affect INR levels achieved with warfarin sodium therapy.",
+        "section": "boxed_warning",
+        "evidence_id": "E1",
+        "quote": "Drugs, dietary changes, and other factors affect INR levels achieved with warfarin sodium therapy"
+      },
+      {
+        "text": "Patients should be instructed about prevention measures to minimize risk of bleeding and to report signs and symptoms of bleeding.",
+        "section": "boxed_warning",
+        "evidence_id": "E1",
+        "quote": "Instruct patients about prevention measures to minimize risk of bleeding and to report signs and symptoms of bleeding"
+      }
+    ],
+    "claims_total": 4,
+    "claims_kept": 4,
+    "removed": [],
+    "gaps": [],
+    "evidence": {
+      "E1": {
+        "id": "E1",
+        "internal_id": "d31e1c1c9816",
+        "product": "warfarin",
+        "ingredient": null,
+        "rxcui": "11289",
+        "source": "dailymed_label",
+        "section": "boxed_warning",
+        "text": "WARNING: BLEEDING RISK \u2022 Warfarin sodium can cause major or fatal bleeding [see Warnings and Precautions (5.1) ]. \u2022 Perform regular monitoring of INR in all treated patients [see Dosage and Administration (2.1) ]. \u2022 Drugs, dietary changes, and other factors affect INR levels achieved with warfarin sodium therapy [see Drug Interactions (7) ]. \u2022 Instruct patients about prevention measures to minimize risk of bleeding and to report signs and symptoms of bleeding [see Patient Counseling Information (17) ].",
+        "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=cdbbc317-35d3-42ba-94f0-c83891358529",
+        "label_title": "WARFARIN SODIUM TABLET [CARDINAL HEALTH 107, LLC]",
+        "label_set_id": "cdbbc317-35d3-42ba-94f0-c83891358529",
+        "label_effective_date": "2025-11-06",
+        "retrieved_at": "2026-10-22T04:10:45.216726+00:00"
+      }
+    },
+    "meta": {
+      "latency_ms": 3791,
+      "llm_calls": 5,
+      "verifier_provider": "groq",
+      "cache_hit": false,
+      "verified": true,
+      "synthesizer_provider": "groq"
+    }
+  }
+}

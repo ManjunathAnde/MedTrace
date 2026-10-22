@@ -1,0 +1,251 @@
+{
+  "source": "replayed: real endpoint, interaction agent and verifier outputs from smoke_cp58.txt (2026-10-21)",
+  "request": {
+    "drugs": [
+      "pantoprazole",
+      "clopidogrel"
+    ]
+  },
+  "http": 200,
+  "body": {
+    "version": "v2",
+    "status": "COMPLETE",
+    "message": null,
+    "resolution": [
+      {
+        "input_name": "pantoprazole",
+        "status": "RESOLVED",
+        "rxcui": "40790",
+        "preferred_name": "pantoprazole",
+        "ingredients": [
+          "pantoprazole"
+        ],
+        "label": {
+          "title": "PANTOPRAZOLE SODIUM TABLET, DELAYED RELEASE [CARDINAL HEALTH 107, LLC]",
+          "set_id": "410d5577-e50a-44f3-aaa8-fbf391a0c261",
+          "effective_date": "2025-12-30",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=410d5577-e50a-44f3-aaa8-fbf391a0c261"
+        },
+        "message": null
+      },
+      {
+        "input_name": "clopidogrel",
+        "status": "RESOLVED",
+        "rxcui": "32968",
+        "preferred_name": "clopidogrel",
+        "ingredients": [
+          "clopidogrel"
+        ],
+        "label": {
+          "title": "CLOPIDOGREL (CLOPIDOGREL BISULFATE) TABLET, FILM COATED [APOTEX CORP.]",
+          "set_id": "edae8df1-caf9-ff72-1304-5ae8b355f8e7",
+          "effective_date": "2025-09-17",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=edae8df1-caf9-ff72-1304-5ae8b355f8e7"
+        },
+        "message": null
+      }
+    ],
+    "interactions": [
+      {
+        "pair": [
+          "pantoprazole",
+          "clopidogrel"
+        ],
+        "finding": "NO_INTERACTION_STATED",
+        "severity": "Info",
+        "severity_rule": "Label states no clinically significant interaction",
+        "claims": [
+          {
+            "text": "No dose adjustment of clopidogrel is necessary when administered with an approved dose of Pantoprazole.",
+            "section": "drug_interactions",
+            "evidence_id": "E27",
+            "quote": "No dose adjustment of clopidogrel is necessary when administered with an approved dose of Pantoprazole"
+          },
+          {
+            "text": "Pantoprazole had less effect on the antiplatelet activity of clopidogrel than did omeprazole or esomeprazole.",
+            "section": "drug_interactions",
+            "evidence_id": "E49",
+            "quote": "pantoprazole had less effect on the antiplatelet activity of clopidogrel than did omeprazole"
+          }
+        ],
+        "removed": [
+          {
+            "text": "Concomitant administration of pantoprazole and clopidogrel had no clinically important effect on exposure to the active metabolite of clopidogrel.",
+            "evidence_id": "E27",
+            "quote": "had no clinically important effect on exposure to the active metabolite of clopidogrel",
+            "verdict": "CUT_SUPPORT",
+            "reason": "The claim omits the qualifier 'in healthy subjects' present in the passage, which limits the scope of the finding."
+          },
+          {
+            "text": "Concomitant administration of pantoprazole and clopidogrel had no clinically important effect on clopidogrel-induced platelet inhibition.",
+            "evidence_id": "E27",
+            "quote": "or clopidogrel-induced platelet inhibition",
+            "verdict": "CUT_QUOTE",
+            "reason": "quote has 4 words (minimum 5)"
+          }
+        ]
+      }
+    ],
+    "needs_review": [],
+    "no_documented_interaction": [],
+    "recalls": [
+      {
+        "ingredient": "pantoprazole",
+        "evidence_id": "E54"
+      },
+      {
+        "ingredient": "pantoprazole",
+        "evidence_id": "E55"
+      },
+      {
+        "ingredient": "pantoprazole",
+        "evidence_id": "E56"
+      },
+      {
+        "ingredient": "clopidogrel",
+        "evidence_id": "E57"
+      },
+      {
+        "ingredient": "clopidogrel",
+        "evidence_id": "E58"
+      },
+      {
+        "ingredient": "clopidogrel",
+        "evidence_id": "E59"
+      }
+    ],
+    "gaps": [],
+    "evidence": {
+      "E27": {
+        "id": "E27",
+        "internal_id": "ef5d986087b0",
+        "product": "pantoprazole",
+        "ingredient": null,
+        "rxcui": "40790",
+        "source": "dailymed_label",
+        "section": "drug_interactions",
+        "text": "Clopidogrel Clinical Impact: Concomitant administration of pantoprazole and clopidogrel in healthy subjects had no clinically important effect on exposure to the active metabolite of clopidogrel or clopidogrel-induced platelet inhibition [see Clinical Pharmacology ( 12.3 )] . Intervention: No dose adjustment of clopidogrel is necessary when administered with an approved dose of Pantoprazole.",
+        "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=410d5577-e50a-44f3-aaa8-fbf391a0c261",
+        "label_title": "PANTOPRAZOLE SODIUM TABLET, DELAYED RELEASE [CARDINAL HEALTH 107, LLC]",
+        "label_set_id": "410d5577-e50a-44f3-aaa8-fbf391a0c261",
+        "label_effective_date": "2025-12-30",
+        "retrieved_at": "2026-10-22T04:10:54.382731+00:00"
+      },
+      "E49": {
+        "id": "E49",
+        "internal_id": "7cf06d1187c9",
+        "product": "clopidogrel",
+        "ingredient": null,
+        "rxcui": "32968",
+        "source": "dailymed_label",
+        "section": "drug_interactions",
+        "text": "Dexlansoprazole, lansoprazole, and pantoprazole had less effect on the antiplatelet activity of clopidogrel than did omeprazole or esomeprazole [see Warnings and Precautions (5.1) and Clinical Pharmacology (12.3) ]. 7.3 Opioids As with other oral P2Y 12 inhibitors, coadministration of opioid agonists delay and reduce the absorption of clopidogrel, presumably because of slowed gastric emptying, resulting in reduced exposure to its metabolites [see Clinical Pharmacology ( 12.3 )] .",
+        "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=edae8df1-caf9-ff72-1304-5ae8b355f8e7",
+        "label_title": "CLOPIDOGREL (CLOPIDOGREL BISULFATE) TABLET, FILM COATED [APOTEX CORP.]",
+        "label_set_id": "edae8df1-caf9-ff72-1304-5ae8b355f8e7",
+        "label_effective_date": "2025-09-17",
+        "retrieved_at": "2026-10-22T04:10:54.382731+00:00"
+      },
+      "E54": {
+        "id": "E54",
+        "internal_id": "66ca8155354e",
+        "product": "pantoprazole",
+        "ingredient": "pantoprazole",
+        "rxcui": "40790",
+        "source": "openfda_recall",
+        "section": "recalls",
+        "text": "FDA enforcement record D-0812-2026: Class II, initiated 2026-08-06, status Ongoing. Reason: CGMP Deviations Product: Pantoprazole Sodium in 0.9% Sodium Chloride Injection, 80 mg/100 mL (0.8 mg/mL) Single-Dose Infusion Bag in 100 mL GALAXY Container, Rx only, Sterile, Baxter Healthcare Corporation, Deerfield, IL, 60015, USA, NDC 0338-9648-12. Note: matched on ingredient name; confirm the specific product.",
+        "url": "https://api.fda.gov/drug/enforcement.json?search=product_description%3A%22pantoprazole%22",
+        "label_title": null,
+        "label_set_id": null,
+        "label_effective_date": null,
+        "retrieved_at": "2026-10-22T04:10:55.995702+00:00"
+      },
+      "E55": {
+        "id": "E55",
+        "internal_id": "13742ec9844c",
+        "product": "pantoprazole",
+        "ingredient": "pantoprazole",
+        "rxcui": "40790",
+        "source": "openfda_recall",
+        "section": "recalls",
+        "text": "FDA enforcement record D-0484-2026: Class II, initiated 2026-03-26, status Ongoing. Reason: Discoloration: Firm received five (5) complaints stating that, \"Tablets discolored darker than normal and have lighter-colored spots.\" Product: Pantoprazole Sodium, Delayed-Release Tablets, USP, 40 mg, 1000-count bottle, Rx only, Manufactured for: Camber Pharmaceuticals, Inc., Piscataway, NJ 08854, By: Hetero, Hetero Labs Limited, Unit V, Polepally, Jadcherta, Mahabubager-509 301, India, NDC 31722-713-10 Note: matched on ingredient name; confirm the specific product.",
+        "url": "https://api.fda.gov/drug/enforcement.json?search=product_description%3A%22pantoprazole%22",
+        "label_title": null,
+        "label_set_id": null,
+        "label_effective_date": null,
+        "retrieved_at": "2026-10-22T04:10:55.995702+00:00"
+      },
+      "E56": {
+        "id": "E56",
+        "internal_id": "e679bbec2928",
+        "product": "pantoprazole",
+        "ingredient": "pantoprazole",
+        "rxcui": "40790",
+        "source": "openfda_recall",
+        "section": "recalls",
+        "text": "FDA enforcement record D-1148-2023: Class II, initiated 2023-09-05, status Terminated. Reason: Lack of Assurance of Sterility: Powder discoloration due to small crack in some vials. Product: Pantoprazole Sodium for Injection 40mg per vial, Single dose vials NDC 71839-122-01 Packaged as (a) 10 Single-dose vials, NDC 71839-122-10; (b) 25 Single-dose vials, NDC 71839-122-25; Rx Only, Mfd. in India for and Distributed by: BE Pharmaceuticals Inc. 203 New Edition Court Cary, NC 27511. Note: matched on ingredient name; confirm the specific product.",
+        "url": "https://api.fda.gov/drug/enforcement.json?search=product_description%3A%22pantoprazole%22",
+        "label_title": null,
+        "label_set_id": null,
+        "label_effective_date": null,
+        "retrieved_at": "2026-10-22T04:10:55.995702+00:00"
+      },
+      "E57": {
+        "id": "E57",
+        "internal_id": "ed36476e8c21",
+        "product": "clopidogrel",
+        "ingredient": "clopidogrel",
+        "rxcui": "32968",
+        "source": "openfda_recall",
+        "section": "recalls",
+        "text": "FDA enforcement record D-0513-2023: Class II, initiated 2023-03-23, status Ongoing. Reason: cGMP Deviations for the manufacturing Firm (Accord Healthcare) after their inspection. Product: Clopidogrel Tablets USP, 75 mg, 90-count bottles, Rx only, Manufactured: Accord Healthcare, Inc., Durham, NC 27703, NDC 68788-8190-9 Note: matched on ingredient name; confirm the specific product.",
+        "url": "https://api.fda.gov/drug/enforcement.json?search=product_description%3A%22clopidogrel%22",
+        "label_title": null,
+        "label_set_id": null,
+        "label_effective_date": null,
+        "retrieved_at": "2026-10-22T04:10:55.995702+00:00"
+      },
+      "E58": {
+        "id": "E58",
+        "internal_id": "c0e48e29c20c",
+        "product": "clopidogrel",
+        "ingredient": "clopidogrel",
+        "rxcui": "32968",
+        "source": "openfda_recall",
+        "section": "recalls",
+        "text": "FDA enforcement record D-0380-2023: Class II, initiated 2023-02-07, status Terminated. Reason: CGMP Deviations: recalling drug products following an FDA inspection. Product: Clopidogrel Tablets USP, 75 mg, Rx Only, Packaged in a)  30-count bottles NDC 16729-218-10 UPC 3 16729 21810 8; b) 90-count bottles NDC 16729-218-15 UPC 3 16729 21815 3; c) 500-count bottles, NDC 16729-218-16, UPC 3 16729 21816 0; Manufactured for: Accord Healthcare, Inc., Durham, NC 27703.  Manufactured by: Intas Pharmaceuticals Limited, Pharmez,\u2026 Note: matched on ingredient name; confirm the specific product.",
+        "url": "https://api.fda.gov/drug/enforcement.json?search=product_description%3A%22clopidogrel%22",
+        "label_title": null,
+        "label_set_id": null,
+        "label_effective_date": null,
+        "retrieved_at": "2026-10-22T04:10:55.995702+00:00"
+      },
+      "E59": {
+        "id": "E59",
+        "internal_id": "ecb478dd7646",
+        "product": "clopidogrel",
+        "ingredient": "clopidogrel",
+        "rxcui": "32968",
+        "source": "openfda_recall",
+        "section": "recalls",
+        "text": "FDA enforcement record D-0787-2021: Class II, initiated 2021-08-02, status Terminated. Reason: Presence of foreign matter Product: Clopidogrel Tablets, USP, 75 mg, 500-count bottle, Rx only, Manufactured for: Macleods Pharma USA, Inc., Plainsboro, NJ 08536, Manufactured by: Macleods Pharmaceutical Ltd., Baddi, Himachal, Pradesh, INDIA  NDC 33342-060-15 Note: matched on ingredient name; confirm the specific product.",
+        "url": "https://api.fda.gov/drug/enforcement.json?search=product_description%3A%22clopidogrel%22",
+        "label_title": null,
+        "label_set_id": null,
+        "label_effective_date": null,
+        "retrieved_at": "2026-10-22T04:10:55.995702+00:00"
+      }
+    },
+    "footer": "Class-level interactions were not checked.",
+    "meta": {
+      "latency_ms": 4811,
+      "llm_calls": 2,
+      "pairs_checked": 1,
+      "pairs_with_candidates": 1,
+      "verifier_provider": "groq",
+      "cache_hit": false,
+      "verified": true
+    }
+  }
+}

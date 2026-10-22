@@ -1,0 +1,186 @@
+{
+  "source": "live 2026-10-22: no LLM call reached a provider",
+  "request": {
+    "drugs": [
+      "amoxicillin",
+      "levothyroxine"
+    ]
+  },
+  "http": 200,
+  "body": {
+    "version": "v2",
+    "status": "COMPLETE",
+    "message": null,
+    "resolution": [
+      {
+        "input_name": "amoxicillin",
+        "status": "RESOLVED",
+        "rxcui": "723",
+        "preferred_name": "amoxicillin",
+        "ingredients": [
+          "amoxicillin"
+        ],
+        "label": {
+          "title": "AMOXICILLIN CAPSULE [PROFICIENT RX LP]",
+          "set_id": "2c395111-c9c1-483e-a542-58b935ede689",
+          "effective_date": "2023-08-01",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=2c395111-c9c1-483e-a542-58b935ede689"
+        },
+        "message": null
+      },
+      {
+        "input_name": "levothyroxine",
+        "status": "RESOLVED",
+        "rxcui": "10582",
+        "preferred_name": "levothyroxine",
+        "ingredients": [
+          "levothyroxine"
+        ],
+        "label": {
+          "title": "LEVOTHYROXINE SODIUM TABLET [NUCARE PHARMACEUTICALS,INC.]",
+          "set_id": "cba64919-3b74-a03a-e053-2995a90a3d89",
+          "effective_date": "2023-07-14",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=cba64919-3b74-a03a-e053-2995a90a3d89"
+        },
+        "message": null
+      }
+    ],
+    "interactions": [],
+    "needs_review": [],
+    "no_documented_interaction": [
+      [
+        "amoxicillin",
+        "levothyroxine"
+      ]
+    ],
+    "recalls": [
+      {
+        "ingredient": "amoxicillin",
+        "evidence_id": "E79"
+      },
+      {
+        "ingredient": "amoxicillin",
+        "evidence_id": "E80"
+      },
+      {
+        "ingredient": "amoxicillin",
+        "evidence_id": "E81"
+      },
+      {
+        "ingredient": "levothyroxine",
+        "evidence_id": "E82"
+      },
+      {
+        "ingredient": "levothyroxine",
+        "evidence_id": "E83"
+      },
+      {
+        "ingredient": "levothyroxine",
+        "evidence_id": "E84"
+      }
+    ],
+    "gaps": [],
+    "evidence": {
+      "E79": {
+        "id": "E79",
+        "internal_id": "f48ae3da9a9a",
+        "product": "amoxicillin",
+        "ingredient": "amoxicillin",
+        "rxcui": "723",
+        "source": "openfda_recall",
+        "section": "recalls",
+        "text": "FDA enforcement record D-0151-2026: Class II, initiated 2025-10-13, status Ongoing. Reason: Subpotent drug; Clavulanate Potassium component Product: Amoxicillin and Clavulanate Potassium for Oral Suspension USP, 200 mg/28.5 mg per 5mL, 100 mL (when reconstituted), Rx only, manufactured in Canada by: Teva Canada Limited, Toronto, Canada M1B 2K9; Manufactured For: Teva Pharmaceuticals USA, Inc., Parsippany, NJ 07054 NDC 0093-2277-7. Note: matched on ingredient name; confirm the specific product.",
+        "url": "https://api.fda.gov/drug/enforcement.json?search=product_description%3A%22amoxicillin%22",
+        "label_title": null,
+        "label_set_id": null,
+        "label_effective_date": null,
+        "retrieved_at": "2026-10-22T04:11:03.882086+00:00"
+      },
+      "E80": {
+        "id": "E80",
+        "internal_id": "36c9862e0251",
+        "product": "amoxicillin",
+        "ingredient": "amoxicillin",
+        "rxcui": "723",
+        "source": "openfda_recall",
+        "section": "recalls",
+        "text": "FDA enforcement record D-0561-2024: Class II, initiated 2024-06-04, status Ongoing. Reason: Subpotent Drug Product: Amoxicillin and Clavulanate Potassium Tablets USP, Chewable 400mg/57mg, 20-count bottles, Rx only, Manufactured in Canada By: Teva Canada Limited, Toronto, Canada M1B 2K9; Manufactured For: Teva Pharmaceuticals USA, Inc., North Wales, PA 19454 NDC 0093-2272-34 Note: matched on ingredient name; confirm the specific product.",
+        "url": "https://api.fda.gov/drug/enforcement.json?search=product_description%3A%22amoxicillin%22",
+        "label_title": null,
+        "label_set_id": null,
+        "label_effective_date": null,
+        "retrieved_at": "2026-10-22T04:11:03.882086+00:00"
+      },
+      "E81": {
+        "id": "E81",
+        "internal_id": "bad07b06f6f2",
+        "product": "amoxicillin",
+        "ingredient": "amoxicillin",
+        "rxcui": "723",
+        "source": "openfda_recall",
+        "section": "recalls",
+        "text": "FDA enforcement record D-1025-2022: Class II, initiated 2022-04-13, status Terminated. Reason: cGMP deviations: Temperature abuse Product: Amoxicillin Capsules, USP, 500 mg, 100-count bottle, Rx only,  MFG: Sandoz Pharma, NDC 0781-2613-01 Note: matched on ingredient name; confirm the specific product.",
+        "url": "https://api.fda.gov/drug/enforcement.json?search=product_description%3A%22amoxicillin%22",
+        "label_title": null,
+        "label_set_id": null,
+        "label_effective_date": null,
+        "retrieved_at": "2026-10-22T04:11:03.882086+00:00"
+      },
+      "E82": {
+        "id": "E82",
+        "internal_id": "78c322c0b186",
+        "product": "levothyroxine",
+        "ingredient": "levothyroxine",
+        "rxcui": "10582",
+        "source": "openfda_recall",
+        "section": "recalls",
+        "text": "FDA enforcement record D-0866-2026: Class I, initiated 2026-08-21, status Ongoing. Reason: Superpotent Drug Product: Thyroid Tablets, USP, 1/2 Grain (30 mg), Each tablet contains: levothyroxine (T4) 19 mcg, liothyronine (T3) 4.5 mcg, 100 Tablets, Rx only, Distributed by: Vitruvias Therapeutics, Auburn, AL 36830, Product of USA, NDC 69680-166-00. Note: matched on ingredient name; confirm the specific product.",
+        "url": "https://api.fda.gov/drug/enforcement.json?search=product_description%3A%22levothyroxine%22",
+        "label_title": null,
+        "label_set_id": null,
+        "label_effective_date": null,
+        "retrieved_at": "2026-10-22T04:11:03.882086+00:00"
+      },
+      "E83": {
+        "id": "E83",
+        "internal_id": "2f3c03a9d318",
+        "product": "levothyroxine",
+        "ingredient": "levothyroxine",
+        "rxcui": "10582",
+        "source": "openfda_recall",
+        "section": "recalls",
+        "text": "FDA enforcement record D-0785-2026: Class II, initiated 2026-08-06, status Ongoing. Reason: Subpotent Drug Product: Levothyroxine Sodium Tablets, USP, 200 mcg (0.2 mg), packaged in a) 90-count bottles (NDC  16729-457-15) and b) 1000-count bottles (NDC 16729-457-17), Rx Only, Manufactured for: Accord Healthcare, Inc., Raleigh, NC 27617, Manufactured by: Intas Pharmaceuticals Limited, Camp Road, Selaqui, Dehradun-248 197, India. Note: matched on ingredient name; confirm the specific product.",
+        "url": "https://api.fda.gov/drug/enforcement.json?search=product_description%3A%22levothyroxine%22",
+        "label_title": null,
+        "label_set_id": null,
+        "label_effective_date": null,
+        "retrieved_at": "2026-10-22T04:11:03.882086+00:00"
+      },
+      "E84": {
+        "id": "E84",
+        "internal_id": "efd0f9909510",
+        "product": "levothyroxine",
+        "ingredient": "levothyroxine",
+        "rxcui": "10582",
+        "source": "openfda_recall",
+        "section": "recalls",
+        "text": "FDA enforcement record D-0776-2026: Class II, initiated 2026-08-06, status Ongoing. Reason: Subpotent Drug Product: Levothyroxine Sodium Tablets, USP, 50 mcg (0.05 mg), 1000-count bottles, Rx Only, Manufactured for: Accord Healthcare, Inc., Raleigh, NC 27617, Manufactured by: Intas Pharmaceuticals Limited, Camp Road, Selaqui, Dehradun-248 197, India, NDC 16729-448-17. Note: matched on ingredient name; confirm the specific product.",
+        "url": "https://api.fda.gov/drug/enforcement.json?search=product_description%3A%22levothyroxine%22",
+        "label_title": null,
+        "label_set_id": null,
+        "label_effective_date": null,
+        "retrieved_at": "2026-10-22T04:11:03.882086+00:00"
+      }
+    },
+    "footer": "Class-level interactions were not checked.",
+    "meta": {
+      "latency_ms": 6665,
+      "llm_calls": 0,
+      "pairs_checked": 1,
+      "pairs_with_candidates": 0,
+      "verifier_provider": null,
+      "cache_hit": false,
+      "verified": true
+    }
+  }
+}

@@ -1,20 +1,24 @@
-import { Info, Menu, Moon, ShieldPlus, Sun, X } from "lucide-react";
+import { ClipboardCheck, Menu, Moon, ShieldPlus, Sun, X } from "lucide-react";
 import { useState } from "react";
 import { MedTraceLogo } from "./MedTraceLogo";
 import { Button } from "./ui/Button";
 import { cn } from "../lib/utils";
 
-const navItems = [
-  { label: "Investigate", icon: ShieldPlus, active: true },
-  { label: "How It Works", icon: Info },
+export type Tab = "ask" | "check";
+
+export const TABS = [
+  { key: "ask" as Tab, label: "Ask MedTrace", icon: ShieldPlus },
+  { key: "check" as Tab, label: "Prescription Check", icon: ClipboardCheck },
 ];
 
 type SidebarContentProps = {
   isDark: boolean;
   onToggleDarkMode: () => void;
+  tab: Tab;
+  onTabChange: (tab: Tab) => void;
 };
 
-function SidebarContent({ isDark, onToggleDarkMode }: SidebarContentProps) {
+function SidebarContent({ isDark, onToggleDarkMode, tab, onTabChange }: SidebarContentProps) {
   return (
     <aside className="flex h-full flex-col justify-between bg-white px-5 py-6 transition-colors dark:bg-slate-950">
       <div>
@@ -22,17 +26,19 @@ function SidebarContent({ isDark, onToggleDarkMode }: SidebarContentProps) {
           <MedTraceLogo />
           <div>
             <div className="text-2xl font-bold text-emerald-800 dark:text-emerald-300">MedTrace</div>
-            <div className="text-sm text-slate-500 dark:text-slate-400">AI Medication Intelligence</div>
+            <div className="text-sm text-slate-500 dark:text-slate-400">FDA label answers for pharmacists and clinicians</div>
           </div>
         </div>
 
         <nav className="mt-10 space-y-2">
-          {navItems.map((item) => (
+          {TABS.map((item) => (
             <button
-              key={item.label}
+              key={item.key}
+              onClick={() => onTabChange(item.key)}
+              aria-current={tab === item.key ? "page" : undefined}
               className={cn(
                 "flex h-12 w-full items-center gap-3 rounded-lg px-4 text-left text-sm font-medium transition",
-                item.active
+                tab === item.key
                   ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300"
                   : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-slate-100",
               )}
@@ -78,18 +84,15 @@ function SidebarContent({ isDark, onToggleDarkMode }: SidebarContentProps) {
   );
 }
 
-type SidebarProps = {
-  isDark: boolean;
-  onToggleDarkMode: () => void;
-};
+type SidebarProps = SidebarContentProps;
 
-export function Sidebar({ isDark, onToggleDarkMode }: SidebarProps) {
+export function Sidebar({ isDark, onToggleDarkMode, tab, onTabChange }: SidebarProps) {
   const [open, setOpen] = useState(false);
 
   return (
     <>
       <div className="fixed left-0 top-0 z-30 hidden h-screen w-72 border-r border-border lg:block">
-        <SidebarContent isDark={isDark} onToggleDarkMode={onToggleDarkMode} />
+        <SidebarContent isDark={isDark} onToggleDarkMode={onToggleDarkMode} tab={tab} onTabChange={onTabChange} />
       </div>
       <div className="sticky top-0 z-40 flex items-center justify-between border-b border-border bg-white/90 px-4 py-3 backdrop-blur transition-colors dark:bg-slate-950/90 lg:hidden">
         <div className="flex items-center gap-2 font-bold text-emerald-800 dark:text-emerald-300">
@@ -107,7 +110,15 @@ export function Sidebar({ isDark, onToggleDarkMode }: SidebarProps) {
             <Button variant="ghost" className="absolute right-3 top-3 h-9 w-9 px-0" onClick={() => setOpen(false)} aria-label="Close navigation">
               <X size={18} />
             </Button>
-            <SidebarContent isDark={isDark} onToggleDarkMode={onToggleDarkMode} />
+            <SidebarContent
+              isDark={isDark}
+              onToggleDarkMode={onToggleDarkMode}
+              tab={tab}
+              onTabChange={(next) => {
+                onTabChange(next);
+                setOpen(false);
+              }}
+            />
           </div>
         </div>
       )}

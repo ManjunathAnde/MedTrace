@@ -1,0 +1,233 @@
+{
+  "source": "replayed: real endpoint, interaction agent and verifier outputs from smoke_cp58.txt (2026-10-21)",
+  "request": {
+    "drugs": [
+      "warfarin",
+      "Zorvaxitran",
+      "aspirin"
+    ]
+  },
+  "http": 200,
+  "body": {
+    "version": "v2",
+    "status": "COMPLETE",
+    "message": null,
+    "resolution": [
+      {
+        "input_name": "warfarin",
+        "status": "RESOLVED",
+        "rxcui": "11289",
+        "preferred_name": "warfarin",
+        "ingredients": [
+          "warfarin"
+        ],
+        "label": {
+          "title": "WARFARIN SODIUM TABLET [CARDINAL HEALTH 107, LLC]",
+          "set_id": "cdbbc317-35d3-42ba-94f0-c83891358529",
+          "effective_date": "2025-11-06",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=cdbbc317-35d3-42ba-94f0-c83891358529"
+        },
+        "message": null
+      },
+      {
+        "input_name": "Zorvaxitran",
+        "status": "NOT_RECOGNIZED",
+        "rxcui": null,
+        "preferred_name": null,
+        "ingredients": [],
+        "label": null,
+        "message": "'Zorvaxitran' wasn't recognized. Check the spelling and try again."
+      },
+      {
+        "input_name": "aspirin",
+        "status": "RESOLVED",
+        "rxcui": "1191",
+        "preferred_name": "aspirin",
+        "ingredients": [
+          "aspirin"
+        ],
+        "label": {
+          "title": "ASPIRIN 81MG (ASPIRIN) TABLET, CHEWABLE [GENDOSE PHARMACEUTICALS, LLC]",
+          "set_id": "1d6552e8-4f89-411f-a352-8f7835851fc0",
+          "effective_date": "2025-04-11",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=1d6552e8-4f89-411f-a352-8f7835851fc0"
+        },
+        "message": null
+      }
+    ],
+    "interactions": [
+      {
+        "pair": [
+          "warfarin",
+          "aspirin"
+        ],
+        "finding": "INTERACTION_DOCUMENTED",
+        "severity": "Info",
+        "severity_rule": "no severity signal",
+        "claims": [
+          {
+            "text": "Aspirin is identified as an antiplatelet agent in the table of drugs that can increase bleeding risk.",
+            "section": "drug_interactions",
+            "evidence_id": "E32",
+            "quote": "Antiplatelet Agents aspirin, cilostazol, clopidogrel, dipyridamole, prasugrel, ticlopidine"
+          }
+        ],
+        "removed": [
+          {
+            "text": "Aspirin is listed as a drug that can increase the risk of bleeding in the context of warfarin.",
+            "evidence_id": "E32",
+            "quote": "Drugs that Can Increase the Risk of Bleeding Drug Class Specific Drugs",
+            "verdict": "CUT_SUPPORT",
+            "reason": "The passage does not mention warfarin, so the claim's specific context is not supported."
+          }
+        ]
+      }
+    ],
+    "needs_review": [],
+    "no_documented_interaction": [],
+    "recalls": [
+      {
+        "ingredient": "warfarin",
+        "evidence_id": "E45"
+      },
+      {
+        "ingredient": "warfarin",
+        "evidence_id": "E46"
+      },
+      {
+        "ingredient": "warfarin",
+        "evidence_id": "E47"
+      },
+      {
+        "ingredient": "aspirin",
+        "evidence_id": "E48"
+      },
+      {
+        "ingredient": "aspirin",
+        "evidence_id": "E49"
+      },
+      {
+        "ingredient": "aspirin",
+        "evidence_id": "E50"
+      }
+    ],
+    "gaps": [],
+    "evidence": {
+      "E32": {
+        "id": "E32",
+        "internal_id": "34c29e23716b",
+        "product": "warfarin",
+        "ingredient": null,
+        "rxcui": "11289",
+        "source": "dailymed_label",
+        "section": "drug_interactions",
+        "text": "Table 3: Drugs that Can Increase the Risk of Bleeding Drug Class Specific Drugs Anticoagulants argatroban, dabigatran, bivalirudin, desirudin, heparin, lepirudin Antiplatelet Agents aspirin, cilostazol, clopidogrel, dipyridamole, prasugrel, ticlopidine Nonsteroidal Anti-Inflammatory Agents celecoxib, diclofenac, diflunisal, fenoprofen, ibuprofen, indomethacin, ketoprofen, ketorolac, mefenamic acid, naproxen, oxaprozin, piroxicam, sulindac Serotonin Reuptake Inhibitors citalopram, desvenlafaxine, duloxetine, escitalopram, fluoxetine, fluvoxamine, milnacipran, paroxetine, sertraline,",
+        "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=cdbbc317-35d3-42ba-94f0-c83891358529",
+        "label_title": "WARFARIN SODIUM TABLET [CARDINAL HEALTH 107, LLC]",
+        "label_set_id": "cdbbc317-35d3-42ba-94f0-c83891358529",
+        "label_effective_date": "2025-11-06",
+        "retrieved_at": "2026-10-22T04:10:57.890583+00:00"
+      },
+      "E45": {
+        "id": "E45",
+        "internal_id": "57621187551e",
+        "product": "warfarin",
+        "ingredient": "warfarin",
+        "rxcui": "11289",
+        "source": "openfda_recall",
+        "section": "recalls",
+        "text": "FDA enforcement record D-0348-2023: Class II, initiated 2023-02-15, status Terminated. Reason: Failed Impurities/Degradation Specifications Product: Warfarin Sodium Tablets, USP 1 mg, 100-count bottle, Rx Only, Distributed by: Rising Health, LLC, Saddle Brook, NJ 07663, NDC# 57237-119-01 Note: matched on ingredient name; confirm the specific product.",
+        "url": "https://api.fda.gov/drug/enforcement.json?search=product_description%3A%22warfarin%22",
+        "label_title": null,
+        "label_set_id": null,
+        "label_effective_date": null,
+        "retrieved_at": "2026-10-22T04:10:58.500191+00:00"
+      },
+      "E46": {
+        "id": "E46",
+        "internal_id": "996db9dd5459",
+        "product": "warfarin",
+        "ingredient": "warfarin",
+        "rxcui": "11289",
+        "source": "openfda_recall",
+        "section": "recalls",
+        "text": "FDA enforcement record D-0201-2024: Class II, initiated 2022-01-26, status Terminated. Reason: CGMP Deviations: Products were exposed to temperatures outside of the products labeled storage conditions. Product: Warfarin Sodium Tablets, USP, 5 mg, 100 Tablets per bottle, Rx Only, Manufactured for: Teva Pharmaceuticals, Parsippany, NJ 07054.  NDC:  0093-1721-01 Note: matched on ingredient name; confirm the specific product.",
+        "url": "https://api.fda.gov/drug/enforcement.json?search=product_description%3A%22warfarin%22",
+        "label_title": null,
+        "label_set_id": null,
+        "label_effective_date": null,
+        "retrieved_at": "2026-10-22T04:10:58.500191+00:00"
+      },
+      "E47": {
+        "id": "E47",
+        "internal_id": "c16e729e4375",
+        "product": "warfarin",
+        "ingredient": "warfarin",
+        "rxcui": "11289",
+        "source": "openfda_recall",
+        "section": "recalls",
+        "text": "FDA enforcement record D-0200-2024: Class II, initiated 2022-01-26, status Terminated. Reason: CGMP Deviations: Products were exposed to temperatures outside of the products labeled storage conditions. Product: Warfarin Sodium Tablets, USP, 2.5 mg, 100 Tablets per bottle, Rx only, Manufactured For: Teva Pharmaceuticals, Parsippany, NJ 07054.  NDC: 0093-1714-01 Note: matched on ingredient name; confirm the specific product.",
+        "url": "https://api.fda.gov/drug/enforcement.json?search=product_description%3A%22warfarin%22",
+        "label_title": null,
+        "label_set_id": null,
+        "label_effective_date": null,
+        "retrieved_at": "2026-10-22T04:10:58.500191+00:00"
+      },
+      "E48": {
+        "id": "E48",
+        "internal_id": "d9962c520c8f",
+        "product": "aspirin",
+        "ingredient": "aspirin",
+        "rxcui": "1191",
+        "source": "openfda_recall",
+        "section": "recalls",
+        "text": "FDA enforcement record D-0058-2025: Class II, initiated 2024-11-11, status Ongoing. Reason: cGMP Deviations: Observations were made that some blister card-foils were separating from the blister cavity. Product: Aspirin Chewable tablet 81 mg, 1 tablet in blister card-foils, 100-count unit dose box, www.safecorhealth.com, NDC 48433-129-01 Note: matched on ingredient name; confirm the specific product.",
+        "url": "https://api.fda.gov/drug/enforcement.json?search=product_description%3A%22aspirin%22",
+        "label_title": null,
+        "label_set_id": null,
+        "label_effective_date": null,
+        "retrieved_at": "2026-10-22T04:10:58.500191+00:00"
+      },
+      "E49": {
+        "id": "E49",
+        "internal_id": "39ff717d14b6",
+        "product": "aspirin",
+        "ingredient": "aspirin",
+        "rxcui": "1191",
+        "source": "openfda_recall",
+        "section": "recalls",
+        "text": "FDA enforcement record D-0641-2024: Class I, initiated 2024-07-11, status Ongoing. Reason: Labeling: Missing Label - some bottles are missing the the manufacturers label that includes the drug facts information. Product: Healthy Living Acetaminophen, Aspirin (NSAID) and Caffeine, tablets USP, 250 mg/250 mg/65 mg, 100-count bottles, Distributed by: Aurohealth LLC, 279 Princeton-Hightstown Road, East Windsor, NJ , Made in India, NDC 58602-882-21. Note: matched on ingredient name; confirm the specific product.",
+        "url": "https://api.fda.gov/drug/enforcement.json?search=product_description%3A%22aspirin%22",
+        "label_title": null,
+        "label_set_id": null,
+        "label_effective_date": null,
+        "retrieved_at": "2026-10-22T04:10:58.500191+00:00"
+      },
+      "E50": {
+        "id": "E50",
+        "internal_id": "8b01aab179e1",
+        "product": "aspirin",
+        "ingredient": "aspirin",
+        "rxcui": "1191",
+        "source": "openfda_recall",
+        "section": "recalls",
+        "text": "FDA enforcement record D-1282-2022: Class III, initiated 2022-06-29, status Ongoing. Reason: Failed Tablet/Capsule Specification : Capsule breakage Product: Aspirin and Extended-Release Dipyridamole Capsules, 25mg/200 mg, 60-count bottle, Rx Only, Manufactured for: Glenmark Pharmaceuticals Inc., USA, Mahwah, NJ 07430, Product of India, NDC 68462-405-60. Note: matched on ingredient name; confirm the specific product.",
+        "url": "https://api.fda.gov/drug/enforcement.json?search=product_description%3A%22aspirin%22",
+        "label_title": null,
+        "label_set_id": null,
+        "label_effective_date": null,
+        "retrieved_at": "2026-10-22T04:10:58.500191+00:00"
+      }
+    },
+    "footer": "Class-level interactions were not checked.",
+    "meta": {
+      "latency_ms": 5891,
+      "llm_calls": 2,
+      "pairs_checked": 1,
+      "pairs_with_candidates": 1,
+      "verifier_provider": "groq",
+      "cache_hit": false,
+      "verified": true
+    }
+  }
+}

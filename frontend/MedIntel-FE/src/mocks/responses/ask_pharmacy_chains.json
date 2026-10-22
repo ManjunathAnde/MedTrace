@@ -1,0 +1,45 @@
+{
+  "source": "replayed: real endpoint, LLM outputs from smoke_cp4.txt (2026-10-21)",
+  "request": {
+    "query": "Which pharmacy chains stock lisinopril?"
+  },
+  "http": 200,
+  "body": {
+    "version": "v2",
+    "status": "INSUFFICIENT_EVIDENCE",
+    "message": null,
+    "block_type": null,
+    "redirect": null,
+    "intent": "full",
+    "drug": {
+      "input_name": "lisinopril",
+      "rxcui": "29046",
+      "preferred_name": "lisinopril",
+      "ingredients": [
+        "lisinopril"
+      ],
+      "label": {
+        "title": "LISINOPRIL TABLET [ST. MARY'S MEDICAL PARK PHARMACY]",
+        "set_id": "5eff766f-82e2-4cd6-e053-2a91aa0a4782",
+        "effective_date": "2026-06-17",
+        "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=5eff766f-82e2-4cd6-e053-2a91aa0a4782"
+      }
+    },
+    "claims": [],
+    "claims_total": 0,
+    "claims_kept": 0,
+    "removed": [],
+    "gaps": [
+      "The provided evidence passages do not contain information about which pharmacy chains stock lisinopril."
+    ],
+    "evidence": {},
+    "meta": {
+      "latency_ms": 5035,
+      "llm_calls": 4,
+      "verifier_provider": null,
+      "cache_hit": false,
+      "verified": true,
+      "synthesizer_provider": "groq"
+    }
+  }
+}
