@@ -52,6 +52,8 @@ SYNTHESIZER_MAX_OUTPUT_TOKENS = (
 )
 # Verifier L2: one batched call, ~1 short result per claim (at most 8 claims).
 VERIFIER_MAX_OUTPUT_TOKENS = 400
+# Interaction agent: one call per pair with candidates (at most 5 claims).
+INTERACTION_MAX_OUTPUT_TOKENS = 600
 _ATTEMPTS_PER_PROVIDER = 2  # first call + one retry on invalid JSON / schema mismatch
 
 T = TypeVar("T", bound=BaseModel)

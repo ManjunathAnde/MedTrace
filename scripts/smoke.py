@@ -44,6 +44,7 @@ from backend.core.prescription_check import (
 )
 from backend.core.router import resolve_profile, unavailable_outcome
 from backend.llm.intent_classifier import classify_query_intent
+from backend.llm.interaction_agent import PairInput, evaluate_pair
 from backend.llm.medication_extractor import extract_medication_names
 import backend.llm.providers as providers
 from backend.llm.providers import ProvidersUnavailableError, complete_json
@@ -54,6 +55,9 @@ from backend.verifier.verifier import verify
 from backend.models.enums import InvestigateStatus, ProfileType, SafetyCategory
 
 FAERS_DISCLAIMER = "FAERS reports do not establish that the drug caused the event."
+
+# httpx logs every request URL at INFO; Upstash's URL comes from the environment.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 async def check_rxnorm_resolves(drug_name: str, expected_rxcui: str, expected_name: str) -> bool:
@@ -641,6 +645,48 @@ async def check_prescription_ten_pair_candidates() -> bool:
     return passed and llm.calls == 0
 
 
+async def _evaluate_candidates(a: str, b: str):
+    """Deterministic pipeline for one pair, then the interaction agent on its candidates."""
+    resolutions = await resolve_products([a, b])
+    products, _ = await gather_product_evidence([r.identity for r in resolutions if r.resolved])
+    number_evidence(products, [])
+    pair = search_all_pairs(products)[0]
+    passages = [c.item for c in pair.candidates]
+    finding, provider = await evaluate_pair(PairInput(
+        product_a=pair.a.product, ingredients_a=pair.a.identity.ingredients,
+        product_b=pair.b.product, ingredients_b=pair.b.identity.ingredients, passages=passages,
+    ))
+    print(json.dumps({"pair": [a, b], "candidates": [p.id for p in passages], "provider": provider,
+                      "finding": finding.finding if finding else None}))
+    for claim in finding.claims if finding else []:
+        print(f"  [{claim.evidence_id}] {claim.text}\n      quote: {claim.quote!r}")
+    return finding, {p.id for p in passages}
+
+
+async def check_agent_tizanidine_ciprofloxacin() -> bool:
+    """CP5 agent: tizanidine + ciprofloxacin -> INTERACTION_DOCUMENTED, claims cite candidates only, <= 5."""
+    await asyncio.sleep(_FULL_REQUEST_PAUSE_S)
+    finding, candidate_ids = await _evaluate_candidates("tizanidine", "ciprofloxacin")
+    return (finding is not None and finding.finding == "INTERACTION_DOCUMENTED"
+            and 1 <= len(finding.claims) <= 5 and all(c.evidence_id in candidate_ids for c in finding.claims))
+
+
+async def check_agent_no_interaction_stated() -> bool:
+    """CP5 agent: pantoprazole + clopidogrel ("no clinically important effect") -> NO_INTERACTION_STATED."""
+    await asyncio.sleep(_FULL_REQUEST_PAUSE_S)
+    finding, candidate_ids = await _evaluate_candidates("pantoprazole", "clopidogrel")
+    return (finding is not None and finding.finding == "NO_INTERACTION_STATED"
+            and all(c.evidence_id in candidate_ids for c in finding.claims))
+
+
+async def check_agent_unavailable_with_invalid_keys() -> bool:
+    """CP5 agent: both providers fail -> None (pair goes to needs_review), never an exception."""
+    await asyncio.sleep(_SHORT_REQUEST_PAUSE_S)
+    with _InvalidKeys("GOOGLE_API_KEY", "GROQ_API_KEY"):
+        finding, _ = await _evaluate_candidates("tizanidine", "ciprofloxacin")
+    return finding is None
+
+
 CHECKS = [
     ("cp1 rxnorm: 'omeprazole' -> omeprazole, not esomeprazole",
      lambda: check_rxnorm_resolves("omeprazole", "7646", "omeprazole")),
@@ -747,6 +793,12 @@ CHECKS = [
      check_prescription_not_recognized_listed),
     ("cp5 prescription: ten-pair test, 9 directly named pairs have candidates (real labels), 0 LLM calls",
      check_prescription_ten_pair_candidates),
+    ("cp5 agent: tizanidine + ciprofloxacin -> INTERACTION_DOCUMENTED, claims cite candidates, at most 5",
+     check_agent_tizanidine_ciprofloxacin),
+    ("cp5 agent: pantoprazole + clopidogrel -> NO_INTERACTION_STATED",
+     check_agent_no_interaction_stated),
+    ("cp5 agent: invalid LLM keys -> no finding (needs review), no exception",
+     check_agent_unavailable_with_invalid_keys),
 ]
 
 
