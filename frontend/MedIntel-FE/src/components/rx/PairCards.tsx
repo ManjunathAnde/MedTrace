@@ -1,4 +1,4 @@
-import { CircleHelp, Link2 } from "lucide-react";
+import { BadgeCheck, CircleHelp, Link2 } from "lucide-react";
 import type { EvidenceItem, InteractionCard, NeedsReview } from "../../api/types";
 import { cn } from "../../lib/utils";
 import { Card } from "../Card";
@@ -13,6 +13,21 @@ const FINDING_TEXT = {
   NO_INTERACTION_STATED: "Label states no clinically significant interaction",
 };
 
+// Plain words for the severity rule that fired (backend Section 9.7 rule strings,
+// e.g. "text has 'contraindicated' (E16)"); the raw rule stays in the tooltip.
+// None for NO_INTERACTION_STATED: the finding line already says it.
+function ruleInWords(card: InteractionCard): string | null {
+  if (card.finding === "NO_INTERACTION_STATED") return null;
+  const rule = card.severity_rule.toLowerCase();
+  if (card.severity === "High") {
+    if (rule.includes("contraindicat")) return "The label says these are contraindicated together.";
+    if (rule.includes("boxed_warning")) return "The label's boxed warning covers this combination.";
+    return "The label says to avoid this combination.";
+  }
+  if (card.severity === "Moderate") return "The label describes a risk or a change in drug levels with this combination.";
+  return "The label mentions this interaction without a stated risk level.";
+}
+
 function PairTitle({ pair }: { pair: [string, string] }) {
   return (
     <h4 className="text-lg font-bold text-slate-950 dark:text-slate-50">
@@ -21,9 +36,11 @@ function PairTitle({ pair }: { pair: [string, string] }) {
   );
 }
 
-// Interaction card: pair, severity badge, the rule that fired, verified claims with source tags.
+// Interaction card: pair, severity badge, the rule in plain words, verified claims with source tags.
 export function InteractionCardView({ card, evidence, onOpen }: { card: InteractionCard; evidence: Record<string, EvidenceItem>; onOpen: OnOpen }) {
   const style = SEVERITY_STYLES[card.severity];
+  const ruleText = ruleInWords(card);
+  const total = card.claims.length + card.removed.length;
   return (
     <Card className={cn("border-l-4 p-5", style.border)}>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -32,11 +49,17 @@ export function InteractionCardView({ card, evidence, onOpen }: { card: Interact
           <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">{FINDING_TEXT[card.finding]}</p>
         </div>
         <span className={cn("rounded-full px-3 py-1 text-xs font-bold uppercase tracking-[0.12em]", style.badge)}>
-          {style.label} severity
+          {card.finding === "NO_INTERACTION_STATED" ? "No interaction stated" : `${style.label} severity`}
         </span>
       </div>
-      <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-        Rule: <span className="font-medium text-slate-700 dark:text-slate-300">{card.severity_rule}</span>
+      {ruleText && (
+        <p className="mt-2 text-sm font-medium text-slate-700 dark:text-slate-300" title={`Rule: ${card.severity_rule}`}>
+          {ruleText}
+        </p>
+      )}
+      <p className="mt-2 flex items-center gap-1.5 text-sm font-semibold text-slate-800 dark:text-slate-200">
+        <BadgeCheck size={16} className="text-emerald-700 dark:text-emerald-300" />
+        Claims verified: {card.claims.length} of {total}
       </p>
       <ul className="mt-4 space-y-3">
         {card.claims.map((claim, index) => (

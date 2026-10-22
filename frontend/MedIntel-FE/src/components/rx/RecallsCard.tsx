@@ -9,6 +9,14 @@ type RecallsCardProps = {
   onOpen: (item: EvidenceItem, quote?: string) => void;
 };
 
+// The backend's recall template (Section 6) ends every record with this note;
+// the card shows it once in the header instead. The source panel keeps the full text.
+const RECALL_NOTE_SUFFIX = " Note: matched on ingredient name; confirm the specific product.";
+
+function withoutRecallNote(text: string) {
+  return text.endsWith(RECALL_NOTE_SUFFIX) ? text.slice(0, -RECALL_NOTE_SUFFIX.length) : text;
+}
+
 // Recalls per ingredient, shown directly from FDA enforcement records (Section 9.8).
 export function RecallsCard({ recalls, evidence, onOpen }: RecallsCardProps) {
   if (!recalls.length) return null;
@@ -39,7 +47,7 @@ export function RecallsCard({ recalls, evidence, onOpen }: RecallsCardProps) {
                     ? "rounded-lg border border-dashed border-border p-3 text-sm text-slate-500 dark:text-slate-400"
                     : "rounded-lg border border-border bg-slate-50/40 p-3 text-sm leading-6 text-slate-700 dark:bg-slate-900/50 dark:text-slate-300"}
                 >
-                  <p>{item.text}</p>
+                  <p>{withoutRecallNote(item.text)}</p>
                   <div className="mt-2">
                     <SourceTag item={item} onOpen={onOpen} />
                   </div>

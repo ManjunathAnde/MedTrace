@@ -7,7 +7,7 @@ import { Button } from "./ui/Button";
 const chips = [
   { label: "Warfarin boxed warnings", query: "What are the boxed warnings for warfarin?" },
   { label: "Ozempic boxed warning", query: "Why does Ozempic have a boxed warning?" },
-  { label: "Ibuprofen + lisinopril", query: "Can I take ibuprofen with lisinopril?" },
+  { label: "Tizanidine + ciprofloxacin", query: "Can I take tizanidine with ciprofloxacin?" },
 ];
 const trustSources = ["RxNorm", "DailyMed", "FDA", "OpenFDA"];
 
