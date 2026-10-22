@@ -52,6 +52,7 @@ from backend.models.report import (
     ResponseMeta,
 )
 from backend.safety.filter import check_wall1
+from backend.verifier.verifier import verify
 
 logging.basicConfig(
     level=logging.INFO,
@@ -82,13 +83,14 @@ async def global_exception_handler(request, exc):
     )
 
 
-def _meta(t0: float, llm_calls: int, synthesizer_provider=None, cache_hit: bool = False) -> ResponseMeta:
+def _meta(t0: float, llm_calls: int, synthesizer_provider=None, cache_hit: bool = False,
+          verified: bool = False, verifier_provider=None) -> ResponseMeta:
     return ResponseMeta(
         latency_ms=int((time.perf_counter() - t0) * 1000),
         llm_calls=llm_calls,
-        verifier_provider=None,
+        verifier_provider=verifier_provider,
         cache_hit=cache_hit,
-        verified=False,  # no verifier until CP4
+        verified=verified,  # True once claims have been through the verifier
         synthesizer_provider=synthesizer_provider,
     )
 
@@ -229,14 +231,14 @@ async def investigate(request: InvestigateRequest):
         question=query, intent=intent, product=identity.normalized_name, evidence=evidence,
     ))
 
-    # Claims must cite a retrieved item (pre-verifier id check; the verifier's L0 in CP4)
+    # Verifier (Section 8): only kept claims reach the user
     by_id = {item.id: item for item in evidence}
-    kept = [c for c in claim_set.claims if c.evidence_id in by_id]
-    for claim in claim_set.claims:
-        if claim.evidence_id not in by_id:
-            logger.warning("claim cut CUT_BAD_ID evidence_id=%r text=%r", claim.evidence_id, claim.text)
+    verified = await verify(claim_set.claims, {item.id: item.text for item in evidence})
+    if verified.verifier_provider is not None:
+        llm_calls += 1
+    kept = verified.kept
     gaps = source_gaps + claim_set.gaps
-    status = final_status(len(kept), len(claim_set.claims) - len(kept), gaps)
+    status = final_status(verified.claims_kept, len(verified.cut), gaps)
 
     response = InvestigateResponse(
         status=status,
@@ -244,17 +246,18 @@ async def investigate(request: InvestigateRequest):
         drug=_drug_out(identity, label),
         claims=[ResponseClaim(text=c.text, section=by_id[c.evidence_id].section,
                               evidence_id=c.evidence_id, quote=c.quote) for c in kept],
-        claims_total=len(claim_set.claims),
-        claims_kept=len(kept),
+        claims_total=verified.claims_total,
+        claims_kept=verified.claims_kept,
         gaps=gaps,
         evidence={c.evidence_id: by_id[c.evidence_id] for c in kept},
-        meta=_meta(t0, llm_calls, synthesizer_provider),
+        meta=_meta(t0, llm_calls, synthesizer_provider, verified=True,
+                   verifier_provider=verified.verifier_provider),
     )
     logger.info(
         "investigate status=%s intent=%s drug=%r rxcui=%s evidence=%d claims=%d/%d gaps=%d "
         "llm_calls=%d latency_ms=%d",
-        status.value, intent, drug_name, identity.rxcui, len(evidence), len(kept),
-        len(claim_set.claims), len(gaps), llm_calls, response.meta.latency_ms,
+        status.value, intent, drug_name, identity.rxcui, len(evidence), verified.claims_kept,
+        verified.claims_total, len(gaps), llm_calls, response.meta.latency_ms,
     )
     await store_cached_response(cache_key, profile, response)
     return response

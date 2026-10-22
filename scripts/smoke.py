@@ -40,6 +40,8 @@ from backend.llm.medication_extractor import extract_medication_names
 from backend.llm.providers import ProvidersUnavailableError, complete_json
 from backend.llm.safety_classifier import classify_safety_category
 from backend.llm.synthesizer import SynthInput, synthesize_claims
+from backend.models.claims import Claim
+from backend.verifier.verifier import verify
 from backend.models.enums import InvestigateStatus, ProfileType, SafetyCategory
 
 FAERS_DISCLAIMER = "FAERS reports do not establish that the drug caused the event."
@@ -341,10 +343,15 @@ async def check_investigate(query: str, expect, pause_s: int = _SHORT_REQUEST_PA
 
 
 def _answered_with_cited_claims(body: dict, data_calls) -> bool:
-    claims = body["claims"]
-    return (body["status"] in ("ANSWERED", "PARTIAL") and claims
+    """CP4: claims are verified; only kept claims are returned; cut count printed."""
+    claims, meta = body["claims"], body["meta"]
+    cut = body["claims_total"] - body["claims_kept"]
+    print(f"verifier: kept {body['claims_kept']}, cut {cut}, provider {meta['verifier_provider']}")
+    expected_status = "PARTIAL" if cut or body["gaps"] else "ANSWERED"
+    return (body["status"] == expected_status and claims and len(claims) == body["claims_kept"]
             and all(c["evidence_id"] in body["evidence"] for c in claims)
-            and body["meta"]["verified"] is False and body["drug"]["label"] is not None)
+            and meta["verified"] is True and meta["verifier_provider"] in ("gemini", "groq")
+            and body["drug"]["label"] is not None)
 
 
 def _ozempic_boxed_keeps_qualifiers(body: dict, data_calls) -> bool:
@@ -361,6 +368,63 @@ async def check_investigate_unavailable_with_invalid_keys() -> bool:
     _print_investigate(code, body, data_calls)
     return (code == 200 and body["status"] == "UNAVAILABLE" and body["block_type"] is None
             and body["drug"] is None and not data_calls)
+
+
+# --- CP4 verifier: verify() called directly, real LLM, fixed hand-written claims ---
+
+_CONTRACT_PASSAGE = (
+    "This Agreement shall automatically renew for successive one-year terms unless either party "
+    "gives written notice of non-renewal at least 60 days before the end of the then-current term."
+)
+
+
+def _print_verified(result) -> None:
+    print(json.dumps({"kept": result.claims_kept, "total": result.claims_total,
+                      "verifier_provider": result.verifier_provider}))
+    for claim in result.kept + result.cut:
+        print(f"  {claim.verdict:13} {claim.text!r}\n      reason: {claim.reason}")
+
+
+async def check_verifier_contract_clause() -> bool:
+    """CP4 domain test: true contract claim KEPT, false claim cut (real LLM)."""
+    true_claim = Claim(
+        text="The agreement renews automatically each year unless notice is given 60 days before the term ends.",
+        evidence_id="C1",
+        quote="automatically renew for successive one-year terms unless either party gives written notice")
+    false_claim = Claim(
+        text="Either party can cancel at any time with 30 days notice.",
+        evidence_id="C1",
+        quote="either party gives written notice of non-renewal at least 60 days")
+    result = await verify([true_claim, false_claim], {"C1": _CONTRACT_PASSAGE})
+    _print_verified(result)
+    verdicts = {c.text: c.verdict for c in result.kept + result.cut}
+    return verdicts[true_claim.text] == "KEPT" and verdicts[false_claim.text] == "CUT_SUPPORT"
+
+
+async def check_verifier_ozempic_passage() -> bool:
+    """CP4: hand-written claims against the real Ozempic boxed-warning passage."""
+    await asyncio.sleep(_SAFETY_PAUSE_S)
+    identity = await fetch_drug_identity("Ozempic")
+    label = await fetch_label_evidence(identity.rxcui, identity.input_name, len(identity.ingredients) == 1)
+    items = build_label_items(identity.normalized_name, identity.rxcui, label, ["boxed_warning"],
+                              datetime.now(timezone.utc).isoformat())
+    passage = next(i.text for i in items if "In rodents" in i.text)
+    print(f"passage ({len(passage)} chars): {passage[:200]!r}...")
+    quote = "In rodents, semaglutide causes dose-dependent and treatment-duration-dependent thyroid C-cell tumors"
+    expected = {
+        "In rodents, semaglutide causes dose-dependent and treatment-duration-dependent thyroid C-cell tumors.": "KEPT",
+        "Semaglutide causes dose-dependent and treatment-duration-dependent thyroid C-cell tumors.": "CUT_SUPPORT",
+        "In rodents, semaglutide causes thyroid C-cell tumors in 40 percent of animals.": "CUT_SUPPORT",
+    }
+    claims = [Claim(text=text, evidence_id="E1", quote=quote) for text in expected]
+    fake_quote_text = "Semaglutide is proven to cause thyroid cancer in humans."
+    claims.append(Claim(text=fake_quote_text, evidence_id="E1",
+                        quote="semaglutide is proven to cause thyroid cancer in humans"))
+    expected[fake_quote_text] = "CUT_QUOTE"
+    result = await verify(claims, {"E1": passage})
+    _print_verified(result)
+    verdicts = {c.text: c.verdict for c in result.kept + result.cut}
+    return verdicts == expected
 
 
 # Benchmark indications and dosing questions (in-01..03, ds-01..03): Section 6
@@ -516,10 +580,10 @@ CHECKS = [
     ("cp3 synthesizer: Ozempic boxed-warning claims keep 'rodent' and 'unknown'",
      lambda: check_synthesizer("Ozempic", "Why does Ozempic have a boxed warning?",
                                require_boxed_terms=("rodent", "unknown"))),
-    ("cp3 /investigate: Ozempic boxed warning -> claims cite evidence; keep 'rodent' and 'unknown'",
+    ("cp4 /investigate: Ozempic boxed warning -> verified claims cite evidence; kept claims keep 'rodent' and 'unknown'",
      lambda: check_investigate("Why does Ozempic have a boxed warning?",
                                _ozempic_boxed_keeps_qualifiers, _FULL_REQUEST_PAUSE_S)),
-    ("cp3 /investigate: warfarin boxed warnings -> ANSWERED/PARTIAL with cited claims",
+    ("cp4 /investigate: warfarin boxed warnings -> verified, ANSWERED/PARTIAL by the status rules, cited claims",
      lambda: check_investigate("What are the boxed warnings for warfarin?",
                                _answered_with_cited_claims, _FULL_REQUEST_PAUSE_S)),
     ("cp3 /investigate: 'Can I take ibuprofen with lisinopril?' -> REDIRECT, zero data calls",
@@ -558,6 +622,10 @@ CHECKS = [
          "Which pharmacy chains stock lisinopril?",
          lambda b, calls: b["status"] == "INSUFFICIENT_EVIDENCE" or bool(b["gaps"]),
          _FULL_REQUEST_PAUSE_S)),
+    ("cp4 verifier: contract clause, true claim KEPT, false claim CUT_SUPPORT (real LLM)",
+     check_verifier_contract_clause),
+    ("cp4 verifier: real Ozempic passage, faithful KEPT, 'in rodents' dropped and added fact CUT_SUPPORT, fake quote CUT_QUOTE",
+     check_verifier_ozempic_passage),
 ]
 
 

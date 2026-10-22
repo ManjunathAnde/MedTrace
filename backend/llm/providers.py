@@ -8,15 +8,18 @@ and call parameters. Every v2 LLM call goes through complete_json.
     then the next provider is tried; an API, network or configuration error
     moves to the next provider straight away
   - Groq: JSON mode, explicit max_tokens under the output-token limit,
-    reasoning_effort only for Qwen models
+    reasoning_effort only for Qwen models; a 429 waits out the window
+    (retry-after, capped at 65s) and retries Groq once
 
 Keys and models come from the environment at call time (GOOGLE_API_KEY,
 GEMINI_MODEL, GROQ_API_KEY, GROQ_MODEL). Drug-agnostic: the verifier may import it.
 """
 
+import asyncio
 import json
 import logging
 import os
+import re
 import time
 from typing import Literal, TypeVar
 
@@ -24,7 +27,7 @@ import httpx
 from google import genai
 from google.genai import errors as genai_errors
 from google.genai import types
-from groq import AsyncGroq, GroqError
+from groq import AsyncGroq, GroqError, RateLimitError
 from pydantic import BaseModel, ValidationError
 
 logger = logging.getLogger(__name__)
@@ -47,6 +50,8 @@ SYNTHESIZER_MAX_OUTPUT_TOKENS = (
     - EXTRACTION_MAX_OUTPUT_TOKENS
     - INTENT_MAX_OUTPUT_TOKENS
 )
+# Verifier L2: one batched call, ~1 short result per claim (at most 8 claims).
+VERIFIER_MAX_OUTPUT_TOKENS = 400
 _ATTEMPTS_PER_PROVIDER = 2  # first call + one retry on invalid JSON / schema mismatch
 
 T = TypeVar("T", bound=BaseModel)
@@ -103,7 +108,44 @@ async def _call_groq(prompt: str, schema: type[BaseModel], max_output_tokens: in
     return response.choices[0].message.content or ""
 
 
-_CALLS = {"gemini": _call_gemini, "groq": _call_groq}
+_GROQ_RATE_LIMIT_MAX_WAIT_S = 65.0  # Groq's limits are per minute
+_GROQ_WAIT_IN_MESSAGE = re.compile(r"try again in (?:(\d+)m)?(\d+(?:\.\d+)?)(ms|s)")
+
+
+def groq_rate_limit_wait_s(exc: RateLimitError) -> float:
+    """
+    Seconds to wait after a Groq 429: the retry-after header, else the wait in
+    the error message ("Please try again in 7.66s" / "1m2.5s" / "450ms"), capped
+    at 65. Neither present: the full 65.
+    """
+    try:
+        wait = float(exc.response.headers.get("retry-after", ""))
+    except ValueError:
+        match = _GROQ_WAIT_IN_MESSAGE.search(str(exc))
+        if match is None:
+            return _GROQ_RATE_LIMIT_MAX_WAIT_S
+        minutes, amount, unit = match.groups()
+        wait = int(minutes or 0) * 60 + float(amount) / (1000 if unit == "ms" else 1)
+    return min(max(wait, 0.0), _GROQ_RATE_LIMIT_MAX_WAIT_S)
+
+
+async def _call_groq_waiting_on_rate_limit(
+    prompt: str, schema: type[BaseModel], max_output_tokens: int
+) -> str:
+    # Groq counts requested max_tokens against its per-minute limits (v1 saw
+    # "Requested 1795"), so a fallback right after a full request can hit 429.
+    # Wait out the window once instead of failing the fallback.
+    try:
+        return await _call_groq(prompt, schema, max_output_tokens)
+    except RateLimitError as exc:
+        wait = groq_rate_limit_wait_s(exc)
+        logger.warning("LLM groq rate limited (429); waiting %.1fs and retrying once schema=%s",
+                       wait, schema.__name__)
+        await asyncio.sleep(wait)
+        return await _call_groq(prompt, schema, max_output_tokens)
+
+
+_CALLS = {"gemini": _call_gemini, "groq": _call_groq_waiting_on_rate_limit}
 
 # Errors that mean "this provider is unavailable now": move to the next one.
 _PROVIDER_ERRORS: dict[Provider, tuple[type[BaseException], ...]] = {
