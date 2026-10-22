@@ -61,3 +61,9 @@ class InvestigateStatus(str, Enum):
     NOT_RECOGNIZED = "NOT_RECOGNIZED"
     ONE_AT_A_TIME = "ONE_AT_A_TIME"
     REDIRECT = "REDIRECT"
+
+
+class PrescriptionCheckStatus(str, Enum):
+    COMPLETE = "COMPLETE"
+    TOO_FEW = "TOO_FEW"
+    TOO_MANY = "TOO_MANY"

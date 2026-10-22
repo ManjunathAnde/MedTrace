@@ -6,7 +6,8 @@ Checks are grouped by checkpoint. CP1 RxNorm checks call fetch_drug_identity
 directly so they exercise RxNorm alone, without the LLM stages in /investigate.
 
 Usage:
-    .venv/Scripts/python -m scripts.smoke
+    .venv/Scripts/python -m scripts.smoke            # every check
+    .venv/Scripts/python -m scripts.smoke "cp5"      # only checks whose label starts with "cp5"
 """
 
 import asyncio
@@ -34,9 +35,17 @@ from backend.evidence.store import (
     build_label_items,
     build_recall_items,
 )
+from backend.core.prescription_check import (
+    gather_product_evidence,
+    gather_recall_evidence,
+    number_evidence,
+    resolve_products,
+    search_all_pairs,
+)
 from backend.core.router import resolve_profile, unavailable_outcome
 from backend.llm.intent_classifier import classify_query_intent
 from backend.llm.medication_extractor import extract_medication_names
+import backend.llm.providers as providers
 from backend.llm.providers import ProvidersUnavailableError, complete_json
 from backend.llm.safety_classifier import classify_safety_category
 from backend.llm.synthesizer import SynthInput, synthesize_claims
@@ -528,6 +537,110 @@ async def check_unavailable_with_invalid_keys() -> bool:
     return statuses == [InvestigateStatus.UNAVAILABLE] * 2
 
 
+# --- CP5 Prescription Check, deterministic parts (real RxNorm, DailyMed, openFDA; no LLM) ---
+
+class _LLMCallCounter:
+    """Counts every provider call made through providers.complete_json."""
+
+    def __enter__(self):
+        self.calls = 0
+        self._original = dict(providers._CALLS)
+
+        def counted(call):
+            async def wrapper(*args, **kwargs):
+                self.calls += 1
+                return await call(*args, **kwargs)
+            return wrapper
+
+        for name, call in self._original.items():
+            providers._CALLS[name] = counted(call)
+        return self
+
+    def __exit__(self, *exc):
+        providers._CALLS.update(self._original)
+
+
+async def _prescription_pairs(names: list[str]):
+    """Resolution, evidence (E-IDs across the request), recalls, and pair candidates."""
+    resolutions = await resolve_products(names)
+    identities = [r.identity for r in resolutions if r.resolved]
+    products, gaps = await gather_product_evidence(identities)
+    recall_items, recall_gaps = await gather_recall_evidence(products)
+    recall_items = number_evidence(products, recall_items)
+    pairs = search_all_pairs(products)
+    print(json.dumps({
+        "resolution": [{"input": r.input_name, "rxcui": r.identity.rxcui if r.identity else None,
+                        "message": r.message} for r in resolutions],
+        "labels": {p.product: p.label.label_title if p.label else None for p in products},
+        "items": {p.product: len(p.items) for p in products},
+        "recall_items": len(recall_items), "gaps": gaps + recall_gaps,
+    }, indent=2))
+    for pair in pairs:
+        print(f"  {pair.pair}: {len(pair.candidates)} candidates")
+        for c in pair.candidates:
+            print(f"    [{c.item.id} {c.item.product} {c.item.section}] matched {c.matched_name!r}: "
+                  f"{c.item.text[:160]!r}")
+    return resolutions, products, recall_items, pairs
+
+
+async def check_prescription_tizanidine_ciprofloxacin() -> bool:
+    """CP5: tizanidine named in ciprofloxacin's contraindications; no LLM call."""
+    with _LLMCallCounter() as llm:
+        _, products, recall_items, pairs = await _prescription_pairs(["tizanidine", "ciprofloxacin"])
+    ids = [i.id for p in products for i in p.items] + [i.id for i in recall_items]
+    in_contraindications = [c for c in pairs[0].candidates if c.item.product.lower() == "ciprofloxacin"
+                            and c.item.section == "contraindications" and c.matched_name == "tizanidine"]
+    ingredients = {i.ingredient for i in recall_items}
+    print(f"cipro contraindications candidates: {len(in_contraindications)}; recall ingredients "
+          f"{sorted(ingredients)}; E-IDs unique: {len(ids) == len(set(ids))}; LLM calls: {llm.calls}")
+    return (bool(in_contraindications) and llm.calls == 0 and len(ids) == len(set(ids))
+            and ingredients == {"tizanidine", "ciprofloxacin"})
+
+
+async def check_prescription_no_interaction_pair() -> bool:
+    """CP5: amoxicillin + levothyroxine -> no candidates in either direction, zero LLM calls."""
+    with _LLMCallCounter() as llm:
+        _, products, _, pairs = await _prescription_pairs(["amoxicillin", "levothyroxine"])
+    print(f"LLM calls: {llm.calls}")
+    return all(p.label for p in products) and pairs[0].candidates == [] and llm.calls == 0
+
+
+async def check_prescription_not_recognized_listed() -> bool:
+    """CP5: an unrecognized entry is listed with its message, not fatal; the others still resolve."""
+    resolutions = await resolve_products(["warfarin", "Zorvaxitran", "aspirin"])
+    for r in resolutions:
+        print(json.dumps({"input": r.input_name, "resolved": r.resolved, "message": r.message}))
+    return ([r.resolved for r in resolutions] == [True, False, True]
+            and resolutions[1].message == "'Zorvaxitran' wasn't recognized. Check the spelling and try again.")
+
+
+# Ten-pair test (Section 9.9): the 9 pairs CP1 found directly named; ibuprofen + lisinopril
+# is the known class-level miss (Section 16), printed but not asserted.
+_TEN_PAIR_DIRECT = [
+    ("warfarin", "aspirin"), ("sertraline", "tramadol"), ("simvastatin", "clarithromycin"),
+    ("clopidogrel", "omeprazole"), ("tizanidine", "ciprofloxacin"), ("sildenafil", "nitroglycerin"),
+    ("lisinopril", "spironolactone"), ("warfarin", "fluconazole"), ("digoxin", "amiodarone"),
+]
+
+
+async def check_prescription_ten_pair_candidates() -> bool:
+    """CP5: candidate search finds passages for every directly named ten-pair pair (real labels)."""
+    passed = True
+    with _LLMCallCounter() as llm:
+        for a, b in _TEN_PAIR_DIRECT + [("ibuprofen", "lisinopril")]:
+            resolutions = await resolve_products([a, b])
+            products, _ = await gather_product_evidence([r.identity for r in resolutions if r.resolved])
+            number_evidence(products, [])
+            pair = search_all_pairs(products)[0] if len(products) == 2 else None
+            found = [(c.item.product, c.item.section, c.matched_name) for c in pair.candidates] if pair else []
+            ok = bool(found) if (a, b) in _TEN_PAIR_DIRECT else True
+            passed &= ok
+            print(json.dumps({"pair": [a, b], "candidates": len(found),
+                              "sections": sorted({f"{p}:{s}" for p, s, _ in found}), "ok": ok}))
+    print(f"LLM calls: {llm.calls}")
+    return passed and llm.calls == 0
+
+
 CHECKS = [
     ("cp1 rxnorm: 'omeprazole' -> omeprazole, not esomeprazole",
      lambda: check_rxnorm_resolves("omeprazole", "7646", "omeprazole")),
@@ -626,18 +739,28 @@ CHECKS = [
      check_verifier_contract_clause),
     ("cp4 verifier: real Ozempic passage, faithful KEPT, 'in rodents' dropped and added fact CUT_SUPPORT, fake quote CUT_QUOTE",
      check_verifier_ozempic_passage),
+    ("cp5 prescription: tizanidine + ciprofloxacin -> candidate in ciprofloxacin contraindications, recalls per ingredient, 0 LLM calls",
+     check_prescription_tizanidine_ciprofloxacin),
+    ("cp5 prescription: amoxicillin + levothyroxine -> no candidates, 0 LLM calls",
+     check_prescription_no_interaction_pair),
+    ("cp5 prescription: 'Zorvaxitran' listed NOT_RECOGNIZED, not fatal",
+     check_prescription_not_recognized_listed),
+    ("cp5 prescription: ten-pair test, 9 directly named pairs have candidates (real labels), 0 LLM calls",
+     check_prescription_ten_pair_candidates),
 ]
 
 
 async def main() -> int:
     load_dotenv()  # LLM keys and models, read by providers at call time
+    prefix = sys.argv[1] if len(sys.argv) > 1 else ""
+    checks = [(label, run) for label, run in CHECKS if label.startswith(prefix)]
     failures = 0
-    for label, run in CHECKS:
+    for label, run in checks:
         print(f"\n=== {label}")
         passed = await run()
         print("PASS" if passed else "FAIL")
         failures += not passed
-    print(f"\n{len(CHECKS) - failures}/{len(CHECKS)} passed")
+    print(f"\n{len(checks) - failures}/{len(checks)} passed")
     return 1 if failures else 0
 
 
