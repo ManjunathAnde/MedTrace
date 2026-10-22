@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import Field
 
@@ -12,6 +13,7 @@ class RecallRecord(BaseSchema):
     classification: RecallClassification
     recall_date: datetime | None
     status: str
+    product_description: str
 
 
 class AdverseEvent(BaseSchema):
@@ -31,11 +33,20 @@ class DrugIdentity(BaseSchema):
     normalized_name: str
     generic_name: str | None
     rxcui: str | None
+    ingredients: list[str]
     brand_names: list[str]
 
 
 class LabelEvidence(BaseSchema):
+    label_title: str
+    set_id: str
+    effective_date: str | None  # YYYY-MM-DD from OpenFDA effective_time
+    url: str
+    tie_breaker: int = Field(ge=1, le=4)  # PROJECT.md Section 5.4 rule that picked the label
+    skipped_set_ids: list[str]  # SPLs skipped because OpenFDA had no label
     boxed_warnings: list[str]
+    indications_and_usage: list[str]
+    dosage_and_administration: list[str]
     contraindications: list[str]
     precautions: list[str]
     drug_interactions: list[str]
@@ -44,11 +55,13 @@ class LabelEvidence(BaseSchema):
 class RecallEvidence(BaseSchema):
     recalls: list[RecallRecord]
     total_count: int
+    query_url: str  # openFDA enforcement query, cited by recall evidence items
 
 
 class AdverseEventEvidence(BaseSchema):
     events: list[AdverseEvent]
     total_count: int
+    query_url: str  # openFDA FAERS count query, cited by FAERS evidence items
 
 
 class InteractionEvidence(BaseSchema):
@@ -74,3 +87,24 @@ class MedicationEvidence(BaseSchema):
     adverse_event_evidence: AdverseEventEvidence | None
     interaction_evidence: InteractionEvidence | None
     metadata: EvidenceMetadata
+
+
+EvidenceSource = Literal["dailymed_label", "openfda_recall", "faers", "absence"]
+
+
+class EvidenceItem(BaseSchema):
+    """One passage the LLM may cite (PROJECT.md Section 6)."""
+
+    id: str  # "E1".. per request, shown to LLM; "" until the store assigns it
+    internal_id: str  # sha1(source|set_id|section|chunk_index|text)[:12]
+    product: str
+    ingredient: str | None  # FAERS and recall items
+    rxcui: str
+    source: EvidenceSource
+    section: str
+    text: str = Field(max_length=600)
+    url: str
+    label_title: str | None
+    label_set_id: str | None
+    label_effective_date: str | None
+    retrieved_at: str  # ISO 8601 UTC

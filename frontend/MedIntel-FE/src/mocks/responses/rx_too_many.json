@@ -1,0 +1,36 @@
+{
+  "source": "live 2026-10-22: no LLM call reached a provider",
+  "request": {
+    "drugs": [
+      "warfarin",
+      "aspirin",
+      "metformin",
+      "lisinopril",
+      "amlodipine",
+      "omeprazole"
+    ]
+  },
+  "http": 200,
+  "body": {
+    "version": "v2",
+    "status": "TOO_MANY",
+    "message": "Prescription Check takes at most 5 medications.",
+    "resolution": [],
+    "interactions": [],
+    "needs_review": [],
+    "no_documented_interaction": [],
+    "recalls": [],
+    "gaps": [],
+    "evidence": {},
+    "footer": "Class-level interactions were not checked.",
+    "meta": {
+      "latency_ms": 0,
+      "llm_calls": 0,
+      "pairs_checked": 0,
+      "pairs_with_candidates": 0,
+      "verifier_provider": null,
+      "cache_hit": false,
+      "verified": false
+    }
+  }
+}

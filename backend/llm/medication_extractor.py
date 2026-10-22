@@ -28,6 +28,8 @@ from backend.llm.groq_client import (
     get_groq_client,
     is_transient_gemini_error,
 )
+from backend.llm.providers import EXTRACTION_MAX_OUTPUT_TOKENS, Provider, complete_json
+from backend.models.classification import ExtractedDrugs
 
 _MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
 _MAX_ATTEMPTS = 3
@@ -192,3 +194,87 @@ async def extract_medication(query: str) -> str:
         _MAX_ATTEMPTS,
     )
     return query
+
+
+# --- v2 extraction (PROJECT.md Sections 5.2, 12.2) ---
+# Verbatim list on providers.py plus a code guard. Replaces extract_medication
+# once /investigate is rewired. Both providers failing raises
+# ProvidersUnavailableError; the caller reports UNAVAILABLE and never uses the
+# raw query as a drug name.
+
+# PROJECT.md Section 12.2, verbatim. {query} is substituted with str.replace
+# because the prompt contains JSON braces.
+_EXTRACTION_PROMPT = """\
+You extract medication names from a user's message. You copy text. You do not interpret it.
+
+RULES
+1. Copy each medication name EXACTLY as the user typed it, character for character, including any misspellings. Never correct spelling. Never expand abbreviations. Never convert brand names to generic names or the reverse.
+2. Extract only names the user explicitly typed. Never infer a medication from a description.
+   - "my blood pressure pill" -> extract nothing
+   - "statins", "NSAIDs", "antibiotics" -> extract nothing (drug classes, not medications)
+3. Exclude strength, dose, and form. Extract the name only.
+   - "Tylenol 500mg tablets" -> "Tylenol"
+   - Keep multi-word product names whole: "Tylenol PM" -> "Tylenol PM"
+4. Do not extract foods, drinks, or other substances: alcohol, coffee, grapefruit, nicotine.
+5. If a name appears more than once, extract it once.
+6. If no medication name is present, return an empty list. An empty list is a correct answer. Never guess to avoid it.
+
+OUTPUT
+Return only JSON: {"drugs": ["name1", "name2"]}
+
+EXAMPLES
+User: "Can I take ibuprofen with lisinopril?"
+{"drugs": ["ibuprofen", "lisinopril"]}
+
+User: "What are the boxed warnings for warfrin?"
+{"drugs": ["warfrin"]}
+
+User: "Is Eliquis 5mg safe with grapefruit juice?"
+{"drugs": ["Eliquis"]}
+
+User: "Does Tylenol PM interact with Zoloft?"
+{"drugs": ["Tylenol PM", "Zoloft"]}
+
+User: "What should I know about my heart medication?"
+{"drugs": []}
+
+User: "Are statins safe with alcohol?"
+{"drugs": []}
+
+USER MESSAGE
+{query}
+"""
+
+
+def build_extraction_prompt(query: str) -> str:
+    return _EXTRACTION_PROMPT.replace("{query}", query)
+
+
+def is_plausible_name(name: str) -> bool:
+    n = name.strip()
+    return 2 <= len(n) <= 60 and any(c.isalpha() for c in n) and not n.isdigit()
+
+
+def validate_extraction(query: str, drugs: list[str]) -> list[str]:
+    """
+    Code guard (Section 5.2): keep only names that appear in the user's text
+    (case-insensitive), dedupe, and drop implausible names. The LLM may not
+    "correct" a name: "warfarin" for the query "warfrin" is dropped.
+    """
+    q = query.lower()
+    valid = [d.strip() for d in drugs if d.strip() and d.strip().lower() in q]
+    rejected = [d for d in drugs if d.strip() not in valid]
+    if rejected:
+        logger.warning("extractor_rejected: %s", rejected)
+    valid = list(dict.fromkeys(valid))
+    return [d for d in valid if is_plausible_name(d)]
+
+
+async def extract_medication_names(query: str) -> tuple[list[str], Provider]:
+    """Verbatim extraction plus the code guard, with the provider used."""
+    extracted, provider = await complete_json(
+        build_extraction_prompt(query), ExtractedDrugs, EXTRACTION_MAX_OUTPUT_TOKENS
+    )
+    drugs = validate_extraction(query, extracted.drugs)
+    logger.info("extraction drugs=%s provider=%s", drugs, provider)
+    return drugs, provider

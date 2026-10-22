@@ -3,7 +3,9 @@ import { Check, Circle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Card } from "./Card";
 
-const steps = [
+type Step = { label: string; children?: string[] };
+
+const ASK_STEPS: Step[] = [
   { label: "Safety Check" },
   { label: "Medication Recognition" },
   { label: "Intent Classification" },
@@ -11,10 +13,10 @@ const steps = [
     label: "Evidence Collection",
     children: ["RxNorm", "DailyMed", "FDA Recall", "OpenFDA FAERS"],
   },
+  { label: "Citation Verification" },
 ];
 
 const STAGE_INTERVAL_MS = 500;
-const REPORT_GENERATION_STAGE = steps.length;
 
 const facts = [
   "The FDA's Adverse Event Reporting System now updates in real time with over 31 million reports, making it one of the largest drug safety databases in the world.",
@@ -78,8 +80,9 @@ function RotatingFactDisplay() {
   );
 }
 
-export function LoadingTimeline() {
+export function LoadingTimeline({ steps = ASK_STEPS, title = "Collecting medication intelligence" }: { steps?: Step[]; title?: string }) {
   const [activeStage, setActiveStage] = useState(0);
+  const REPORT_GENERATION_STAGE = steps.length;
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -87,13 +90,13 @@ export function LoadingTimeline() {
     }, STAGE_INTERVAL_MS);
 
     return () => window.clearInterval(timer);
-  }, []);
+  }, [REPORT_GENERATION_STAGE]);
 
   return (
     <Card className="p-5 sm:p-6">
       <div className="mb-4">
         <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Investigation running</p>
-        <h2 className="mt-2 text-2xl font-bold text-slate-950 dark:text-slate-50">Collecting medication intelligence</h2>
+        <h2 className="mt-2 text-2xl font-bold text-slate-950 dark:text-slate-50">{title}</h2>
       </div>
       <div className="space-y-2">
         {steps.map((step, index) => {

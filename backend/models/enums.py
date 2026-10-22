@@ -33,3 +33,37 @@ class SafetyDecision(str, Enum):
 class SafetyClassifierType(str, Enum):
     RULE = "rule"
     GEMINI = "gemini"
+
+
+# --- v2 (PROJECT.md Sections 5 and 10) ---
+
+class SafetyCategory(str, Enum):
+    """Wall 2 output; PERSONAL_ADVICE and SELF_HARM_RISK double as block_type."""
+
+    SAFE = "SAFE"
+    PERSONAL_ADVICE = "PERSONAL_ADVICE"
+    SELF_HARM_RISK = "SELF_HARM_RISK"
+
+
+class Wall1Action(str, Enum):
+    BLOCK = "block"
+    ESCALATE = "escalate"  # logged only; wall 2 behaves the same either way
+    PASS = "pass"
+
+
+class InvestigateStatus(str, Enum):
+    ANSWERED = "ANSWERED"
+    PARTIAL = "PARTIAL"
+    INSUFFICIENT_EVIDENCE = "INSUFFICIENT_EVIDENCE"
+    UNAVAILABLE = "UNAVAILABLE"
+    BLOCKED = "BLOCKED"
+    NO_DRUG = "NO_DRUG"
+    NOT_RECOGNIZED = "NOT_RECOGNIZED"
+    ONE_AT_A_TIME = "ONE_AT_A_TIME"
+    REDIRECT = "REDIRECT"
+
+
+class PrescriptionCheckStatus(str, Enum):
+    COMPLETE = "COMPLETE"
+    TOO_FEW = "TOO_FEW"
+    TOO_MANY = "TOO_MANY"

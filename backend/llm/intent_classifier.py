@@ -33,6 +33,12 @@ from backend.llm.groq_client import (
     get_groq_client,
     is_transient_gemini_error,
 )
+from backend.llm.providers import (
+    INTENT_MAX_OUTPUT_TOKENS,
+    Provider,
+    ProvidersUnavailableError,
+    complete_json,
+)
 from backend.models.base import BaseSchema
 from backend.models.classification import IntentClassificationResult, LLMCallDiagnostics
 from backend.models.enums import ProfileType
@@ -64,6 +70,12 @@ PROFILES:
      - "Analyze Metformin"
      - "Tell me everything about Wegovy"
      - "Tell me everything important about semaglutide"
+   Also select this for questions about what a medication is used or approved
+   for (indications), and about dosing, how or when to take it, or how long it
+   can be used, as written on the label.
+     - "What is lisinopril used for?"
+     - "How should metformin be taken?"
+     - "What is the maximum dose of acetaminophen?"
 
 2. warnings_review
    Select when the user wants to understand the safety warnings documented in the
@@ -342,3 +354,28 @@ async def classify_intent(query: str) -> IntentClassificationResult:
         attempts=_MAX_ATTEMPTS,
         api_error_type=last_error_type,
     )
+
+
+# --- v2 intent (PROJECT.md Sections 3, 12) ---
+# Same prompt and schema on providers.py (temperature 0, INTENT budget). Used by
+# /investigate; v1 classify_intent stays for backend/evaluation/runner.py.
+# Both providers failing keeps v1's fail-safe: full_investigation, confidence 0.
+
+async def classify_query_intent(query: str) -> tuple[IntentClassificationResult, Provider | None]:
+    """Intent profile with the provider used (None when both providers failed)."""
+    try:
+        raw, provider = await complete_json(
+            _PROMPT_TEMPLATE.format(query=query), _GeminiIntentResponse, INTENT_MAX_OUTPUT_TOKENS
+        )
+    except ProvidersUnavailableError as exc:
+        logger.warning("intent unavailable (%s); defaulting to full_investigation", exc)
+        return IntentClassificationResult(
+            profile=ProfileType.FULL_INVESTIGATION,
+            confidence=0.0,
+            reason="intent classifier unavailable",
+        ), None
+    logger.info("intent profile=%s confidence=%.2f provider=%s",
+                raw.profile.value, raw.confidence, provider)
+    return IntentClassificationResult(
+        profile=raw.profile, confidence=raw.confidence, reason=raw.reason
+    ), provider

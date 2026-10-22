@@ -24,7 +24,7 @@ async def run(medication_name: str) -> MedicationEvidence:
     failed: list[str] = []
 
     label, recall, aes = await _gather_full_investigation(
-        identity.rxcui, search_name, successful, failed
+        identity, search_name, successful, failed
     )
 
     return MedicationEvidence(

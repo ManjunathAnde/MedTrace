@@ -1,0 +1,53 @@
+{
+  "source": "live 2026-10-22: no LLM call reached a provider",
+  "request": {
+    "drugs": [
+      "warfarin",
+      "Zorvaxitran"
+    ]
+  },
+  "http": 200,
+  "body": {
+    "version": "v2",
+    "status": "TOO_FEW",
+    "message": "Add at least two recognized medications to run a check.",
+    "resolution": [
+      {
+        "input_name": "warfarin",
+        "status": "RESOLVED",
+        "rxcui": "11289",
+        "preferred_name": "warfarin",
+        "ingredients": [
+          "warfarin"
+        ],
+        "label": null,
+        "message": null
+      },
+      {
+        "input_name": "Zorvaxitran",
+        "status": "NOT_RECOGNIZED",
+        "rxcui": null,
+        "preferred_name": null,
+        "ingredients": [],
+        "label": null,
+        "message": "'Zorvaxitran' wasn't recognized. Check the spelling and try again."
+      }
+    ],
+    "interactions": [],
+    "needs_review": [],
+    "no_documented_interaction": [],
+    "recalls": [],
+    "gaps": [],
+    "evidence": {},
+    "footer": "Class-level interactions were not checked.",
+    "meta": {
+      "latency_ms": 251,
+      "llm_calls": 0,
+      "pairs_checked": 0,
+      "pairs_with_candidates": 0,
+      "verifier_provider": null,
+      "cache_hit": false,
+      "verified": false
+    }
+  }
+}

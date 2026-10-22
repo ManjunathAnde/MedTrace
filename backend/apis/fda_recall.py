@@ -64,6 +64,7 @@ def _normalize_record(raw: dict) -> RecallRecord:
         classification=_map_classification(raw.get("classification")),
         recall_date=_parse_recall_date(raw.get("recall_initiation_date")),
         status=raw.get("status", ""),
+        product_description=raw.get("product_description", ""),
     )
 
 
@@ -90,6 +91,9 @@ async def fetch_recall_evidence(generic_name: str) -> RecallEvidence:
     if cache_key in _cache:
         return _cache[cache_key]
 
+    search = f'product_description:"{generic_name}"'
+    query_url = str(httpx.URL(_BASE_URL, params={"search": search}))
+
     try:
         async with httpx.AsyncClient(timeout=8.0) as client:
             # Search by product_description rather than openfda.generic_name.
@@ -100,7 +104,7 @@ async def fetch_recall_evidence(generic_name: str) -> RecallEvidence:
             response = await client.get(
                 _BASE_URL,
                 params={
-                    "search": f'product_description:"{generic_name}"',
+                    "search": search,
                     "limit": 100,
                 },
             )
@@ -110,7 +114,7 @@ async def fetch_recall_evidence(generic_name: str) -> RecallEvidence:
     # OpenFDA returns 404 when no enforcement records match the query.
     # This is an expected response meaning zero recalls — not a service error.
     if response.status_code == 404:
-        evidence = RecallEvidence(recalls=[], total_count=0)
+        evidence = RecallEvidence(recalls=[], total_count=0, query_url=query_url)
         _cache[cache_key] = evidence
         return evidence
 
@@ -131,6 +135,6 @@ async def fetch_recall_evidence(generic_name: str) -> RecallEvidence:
     # Sort newest-first so recalls[0] is always the most recent.
     # Records with unparseable dates (recall_date=None) sort to the end via datetime.min.
     recalls.sort(key=lambda r: r.recall_date or datetime.min, reverse=True)
-    evidence = RecallEvidence(recalls=recalls, total_count=total_count)
+    evidence = RecallEvidence(recalls=recalls, total_count=total_count, query_url=query_url)
     _cache[cache_key] = evidence
     return evidence

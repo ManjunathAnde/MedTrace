@@ -1,0 +1,30 @@
+{
+  "source": "replayed: real endpoint, LLM outputs from smoke_cp4.txt (2026-10-21)",
+  "request": {
+    "query": "What are the side effects of Zorvaxitran?"
+  },
+  "http": 200,
+  "body": {
+    "version": "v2",
+    "status": "NOT_RECOGNIZED",
+    "message": "'Zorvaxitran' wasn't recognized. Check the spelling and try again.",
+    "block_type": null,
+    "redirect": null,
+    "intent": "adverse_events",
+    "drug": null,
+    "claims": [],
+    "claims_total": 0,
+    "claims_kept": 0,
+    "removed": [],
+    "gaps": [],
+    "evidence": {},
+    "meta": {
+      "latency_ms": 249,
+      "llm_calls": 3,
+      "verifier_provider": null,
+      "cache_hit": false,
+      "verified": false,
+      "synthesizer_provider": null
+    }
+  }
+}

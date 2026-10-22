@@ -1,0 +1,30 @@
+{
+  "source": "live 2026-10-22: no LLM call reached a provider",
+  "request": {
+    "query": "What are the boxed warnings for warfarin?"
+  },
+  "http": 200,
+  "body": {
+    "version": "v2",
+    "status": "UNAVAILABLE",
+    "message": "MedTrace couldn't complete its checks right now. Please try again.",
+    "block_type": null,
+    "redirect": null,
+    "intent": null,
+    "drug": null,
+    "claims": [],
+    "claims_total": 0,
+    "claims_kept": 0,
+    "removed": [],
+    "gaps": [],
+    "evidence": {},
+    "meta": {
+      "latency_ms": 701,
+      "llm_calls": 1,
+      "verifier_provider": null,
+      "cache_hit": false,
+      "verified": false,
+      "synthesizer_provider": null
+    }
+  }
+}

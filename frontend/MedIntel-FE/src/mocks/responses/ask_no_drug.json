@@ -1,0 +1,30 @@
+{
+  "source": "replayed: real endpoint, LLM outputs from smoke_cp4.txt (2026-10-21)",
+  "request": {
+    "query": "What are the boxed warnings for blood thinners?"
+  },
+  "http": 200,
+  "body": {
+    "version": "v2",
+    "status": "NO_DRUG",
+    "message": "Please include the medication name in your question.",
+    "block_type": null,
+    "redirect": null,
+    "intent": "warnings",
+    "drug": null,
+    "claims": [],
+    "claims_total": 0,
+    "claims_kept": 0,
+    "removed": [],
+    "gaps": [],
+    "evidence": {},
+    "meta": {
+      "latency_ms": 0,
+      "llm_calls": 3,
+      "verifier_provider": null,
+      "cache_hit": false,
+      "verified": false,
+      "synthesizer_provider": null
+    }
+  }
+}

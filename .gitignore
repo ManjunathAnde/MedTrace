@@ -50,3 +50,12 @@ warfarin-validation.log
 # Internal docs
 CLAUDE.md
 Read.md
+
+# v2 build docs (private)
+PROJECT.md
+DECISIONS.md
+docs/
+
+benchmark/results/scratch/
+
+benchmark/

@@ -3,15 +3,23 @@ import os
 
 import httpx
 
-from backend.models.enums import ProfileType
-from backend.models.report import MedicationReport
+from backend.models.enums import InvestigateStatus, PrescriptionCheckStatus, ProfileType
+from backend.models.report import InvestigateResponse, PrescriptionCheckResponse
 
 logger = logging.getLogger(__name__)
 
-CACHE_VERSION = "v2"
+# v1 entries use "v2:"; v2 reads and writes only "v4:" in the same Upstash instance.
+# v4 (2026-10-21): responses carry verifier-cut claims (`removed`); no v3 entry lacking them is read.
+CACHE_VERSION = "v4"
+
+# Only these are cached (PROJECT.md Section 6), and only once verified (CP4).
+CACHEABLE_STATUSES = {InvestigateStatus.ANSWERED, InvestigateStatus.PARTIAL}
 
 TWELVE_HOURS_SECONDS = 12 * 60 * 60
 THIRTY_DAYS_SECONDS = 30 * 24 * 60 * 60
+
+# Prescription Check responses carry recalls, so they share the recall TTL.
+PRESCRIPTION_CHECK_CACHE_TTL = TWELVE_HOURS_SECONDS
 
 PROFILE_CACHE_TTLS = {
     ProfileType.FULL_INVESTIGATION: TWELVE_HOURS_SECONDS,
@@ -46,7 +54,12 @@ def _cache_ttl_for_profile(profile: ProfileType) -> int:
     return PROFILE_CACHE_TTLS[profile]
 
 
-async def get_cached_report(cache_key: str) -> MedicationReport | None:
+def is_cacheable(response: InvestigateResponse) -> bool:
+    return response.status in CACHEABLE_STATUSES and response.meta.verified
+
+
+async def _redis_get(cache_key: str) -> str | None:
+    """Raw cached JSON, or None on a miss, a cache error, or no cache configured."""
     if _redis_client is None:
         logger.info("CACHE MISS: %s", cache_key)
         return None
@@ -63,29 +76,19 @@ async def get_cached_report(cache_key: str) -> MedicationReport | None:
             logger.info("CACHE MISS: %s", cache_key)
             return None
 
-        report = MedicationReport.model_validate_json(cached_value)
         logger.info("CACHE HIT: %s", cache_key)
-        return report
+        return cached_value
     except Exception as exc:
         logger.warning("CACHE ERROR: read failed for %s: %s", cache_key, exc)
         return None
 
 
-async def store_cached_report(
-    cache_key: str,
-    profile: ProfileType,
-    report: MedicationReport,
-) -> None:
+async def _redis_set(cache_key: str, value: str, ttl_seconds: int) -> None:
     if _redis_client is None:
         return
 
-    ttl_seconds = _cache_ttl_for_profile(profile)
     try:
-        report_json = report.model_dump_json()
-        response = await _redis_client.post(
-            "/",
-            json=["SET", cache_key, report_json, "EX", ttl_seconds],
-        )
+        response = await _redis_client.post("/", json=["SET", cache_key, value, "EX", ttl_seconds])
         response.raise_for_status()
         response_body = response.json()
         if response_body.get("error"):
@@ -94,6 +97,55 @@ async def store_cached_report(
         logger.info("CACHE STORE: %s ttl=%s", cache_key, ttl_seconds)
     except Exception as exc:
         logger.warning("CACHE ERROR: store failed for %s: %s", cache_key, exc)
+
+
+async def get_cached_response(cache_key: str) -> InvestigateResponse | None:
+    cached_value = await _redis_get(cache_key)
+    if cached_value is None:
+        return None
+    try:
+        return InvestigateResponse.model_validate_json(cached_value)
+    except Exception as exc:
+        logger.warning("CACHE ERROR: read failed for %s: %s", cache_key, exc)
+        return None
+
+
+async def store_cached_response(
+    cache_key: str,
+    profile: ProfileType,
+    investigate_response: InvestigateResponse,
+) -> None:
+    if not is_cacheable(investigate_response):
+        return
+    await _redis_set(cache_key, investigate_response.model_dump_json(), _cache_ttl_for_profile(profile))
+
+
+# --- Prescription Check (owner note 2026-10-21): demo pairs can be pre-warmed ---
+
+def build_prescription_cache_key(rxcuis: list[str]) -> str:
+    """Keyed on the sorted resolved RxCUIs, so input order and spelling case don't matter."""
+    return f"{CACHE_VERSION}:prescription_check:{','.join(sorted(set(rxcuis)))}"
+
+
+def is_prescription_check_cacheable(response: PrescriptionCheckResponse) -> bool:
+    return response.status == PrescriptionCheckStatus.COMPLETE and response.meta.verified
+
+
+async def get_cached_prescription_check(cache_key: str) -> PrescriptionCheckResponse | None:
+    cached_value = await _redis_get(cache_key)
+    if cached_value is None:
+        return None
+    try:
+        return PrescriptionCheckResponse.model_validate_json(cached_value)
+    except Exception as exc:
+        logger.warning("CACHE ERROR: read failed for %s: %s", cache_key, exc)
+        return None
+
+
+async def store_cached_prescription_check(cache_key: str, response: PrescriptionCheckResponse) -> None:
+    if not is_prescription_check_cacheable(response):
+        return
+    await _redis_set(cache_key, response.model_dump_json(), PRESCRIPTION_CHECK_CACHE_TTL)
 
 
 async def close_report_cache() -> None:

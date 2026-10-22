@@ -1,9 +1,9 @@
 import { useCallback, useState } from "react";
 import axios from "axios";
 import { investigate as investigateRequest } from "../api/investigate";
-import type { InvestigationResponse } from "../api/investigate";
+import type { InvestigateResponse } from "../api/types";
 
-export type { InvestigationResponse };
+export type { InvestigateResponse };
 
 const MIN_SUCCESS_LOADING_MS = 2000;
 
@@ -13,37 +13,34 @@ export type InvestigationError = {
   message: string;
 };
 
-function messageForStatus(status?: number): InvestigationError {
-  if (status === 403) {
+// Every expected outcome is HTTP 200 with a status (PROJECT.md Section 10);
+// only malformed requests and server errors land here.
+export function messageForError(caught: unknown): InvestigationError {
+  const status = axios.isAxiosError(caught) ? caught.response?.status : undefined;
+  if (status === 503) {
     return {
       status,
-      title: "Medical safety review required",
-      message: "This request cannot be completed automatically. Please consult a qualified healthcare professional for medication guidance.",
+      title: "Drug name lookup is unavailable",
+      message: "RxNorm, the service MedTrace uses to recognize medication names, isn't responding. Please try again in a moment.",
     };
   }
-
-  if (status === 422) {
-    return {
-      status,
-      title: "Medication not found",
-      message: "We could not match that query to a medication. Try a generic or brand name with standard spelling.",
-    };
+  if (import.meta.env.DEV && !status && caught instanceof Error && caught.message.startsWith("Mock mode:")) {
+    return { title: "No saved response", message: caught.message };
   }
-
   return {
     status,
     title: "Something went wrong",
-    message: "The investigation could not be completed. Please try again in a moment.",
+    message: "The request could not be completed. Please try again in a moment.",
   };
 }
 
-function wait(ms: number) {
+export function wait(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 export function useInvestigation() {
   const [query, setQuery] = useState("");
-  const [report, setReport] = useState<InvestigationResponse | null>(null);
+  const [report, setReport] = useState<InvestigateResponse | null>(null);
   const [error, setError] = useState<InvestigationError | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -66,8 +63,7 @@ export function useInvestigation() {
       setReport(payload);
       setLoading(false);
     } catch (caught) {
-      const status = axios.isAxiosError(caught) ? caught.response?.status : undefined;
-      setError(messageForStatus(status));
+      setError(messageForError(caught));
       setLoading(false);
     }
   }, []);
@@ -78,7 +74,5 @@ export function useInvestigation() {
     report,
     error,
     investigate,
-    data: report,
-    isLoading: loading,
   };
 }
