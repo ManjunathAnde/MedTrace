@@ -485,27 +485,15 @@ async def classify_safety(query: str) -> SafetyClassificationResult:
 
 
 # --- v2 wall 2 (PROJECT.md Sections 5.1, 12.1) ---
-# Three categories on providers.py. Replaces classify_safety once /investigate
-# is rewired. Both providers failing raises ProvidersUnavailableError; the caller
-# reports UNAVAILABLE, never BLOCKED.
-
-# v1 guidance without its trailing query line; the query goes after Section 12.1.
-_V1_SAFETY_GUIDANCE = _PROMPT_TEMPLATE.rsplit('User query: "{query}"', 1)[0]
-
-# Bridges v1's SAFE/UNSAFE wording to the Section 12.1 categories.
-_CATEGORY_BRIDGE = """\
----
-
-# Output Categories
-
-The categories below replace SAFE and UNSAFE as the output. In the guidance above, UNSAFE means PERSONAL_ADVICE, or SELF_HARM_RISK when the message suggests intent to harm oneself.
-
-"""
+# Three categories on providers.py, used by /investigate (v1 classify_safety stays
+# for backend/evaluation/runner.py). Both providers failing raises
+# ProvidersUnavailableError; the caller reports UNAVAILABLE, never BLOCKED.
+# The prompt is Section 12.1 alone (owner: no v1 guidance, ~2k fewer tokens).
 
 # PROJECT.md Section 12.1, verbatim.
 _SAFETY_CATEGORIES = """\
 Classify the user's message into exactly one category:
-- SAFE: general questions about a medication's FDA label information, including clinical questions about overdose management, antidotes, warnings, interactions, or dosing as written on the label.
+- SAFE: general questions about a medication's FDA label information, including clinical questions about overdose management, antidotes, warnings, interactions, or dosing as written on the label. Questions asking whether two or more named medications interact are SAFE, even when phrased in first person ('Can I take X with Y?'), as long as they don't ask what a specific person should do about their own treatment.
 - PERSONAL_ADVICE: asks what a specific person should take, how much to give or take, or whether to start, stop, or change their own or someone else's medication.
 - SELF_HARM_RISK: suggests intent to harm oneself, including asking how much of a drug would cause harm or death to themselves.
 
@@ -518,11 +506,12 @@ EXAMPLES
 "How much Tylenol should I give my 2 year old?" -> PERSONAL_ADVICE
 "Should I stop taking my lisinopril?" -> PERSONAL_ADVICE
 "What is the maximum daily dose listed on the acetaminophen label?" -> SAFE
+"Can I take ibuprofen with lisinopril?" -> SAFE (general interaction question)
 """
 
 
 def build_safety_category_prompt(query: str) -> str:
-    return f'{_V1_SAFETY_GUIDANCE}{_CATEGORY_BRIDGE}{_SAFETY_CATEGORIES}\nUser query: "{query}"\n'
+    return f'{_SAFETY_CATEGORIES}\nUser query: "{query}"\n'
 
 
 async def classify_safety_category(query: str) -> tuple[SafetyVerdict, Provider]:

@@ -3,12 +3,16 @@ import os
 
 import httpx
 
-from backend.models.enums import ProfileType
-from backend.models.report import MedicationReport
+from backend.models.enums import InvestigateStatus, ProfileType
+from backend.models.report import InvestigateResponse
 
 logger = logging.getLogger(__name__)
 
-CACHE_VERSION = "v2"
+# v1 entries use "v2:"; v2 reads and writes only "v3:" in the same Upstash instance.
+CACHE_VERSION = "v3"
+
+# Only these are cached (PROJECT.md Section 6), and only once verified (CP4).
+CACHEABLE_STATUSES = {InvestigateStatus.ANSWERED, InvestigateStatus.PARTIAL}
 
 TWELVE_HOURS_SECONDS = 12 * 60 * 60
 THIRTY_DAYS_SECONDS = 30 * 24 * 60 * 60
@@ -46,7 +50,11 @@ def _cache_ttl_for_profile(profile: ProfileType) -> int:
     return PROFILE_CACHE_TTLS[profile]
 
 
-async def get_cached_report(cache_key: str) -> MedicationReport | None:
+def is_cacheable(response: InvestigateResponse) -> bool:
+    return response.status in CACHEABLE_STATUSES and response.meta.verified
+
+
+async def get_cached_response(cache_key: str) -> InvestigateResponse | None:
     if _redis_client is None:
         logger.info("CACHE MISS: %s", cache_key)
         return None
@@ -63,28 +71,27 @@ async def get_cached_report(cache_key: str) -> MedicationReport | None:
             logger.info("CACHE MISS: %s", cache_key)
             return None
 
-        report = MedicationReport.model_validate_json(cached_value)
+        cached = InvestigateResponse.model_validate_json(cached_value)
         logger.info("CACHE HIT: %s", cache_key)
-        return report
+        return cached
     except Exception as exc:
         logger.warning("CACHE ERROR: read failed for %s: %s", cache_key, exc)
         return None
 
 
-async def store_cached_report(
+async def store_cached_response(
     cache_key: str,
     profile: ProfileType,
-    report: MedicationReport,
+    investigate_response: InvestigateResponse,
 ) -> None:
-    if _redis_client is None:
+    if _redis_client is None or not is_cacheable(investigate_response):
         return
 
     ttl_seconds = _cache_ttl_for_profile(profile)
     try:
-        report_json = report.model_dump_json()
         response = await _redis_client.post(
             "/",
-            json=["SET", cache_key, report_json, "EX", ttl_seconds],
+            json=["SET", cache_key, investigate_response.model_dump_json(), "EX", ttl_seconds],
         )
         response.raise_for_status()
         response_body = response.json()

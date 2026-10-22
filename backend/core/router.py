@@ -6,7 +6,15 @@ Centralizes the low-confidence fallback policy so main.py contains no routing lo
 
 import logging
 
+from backend.evidence.store import (
+    FAERS_TOP_REACTIONS,
+    FAERS_TOP_REACTIONS_FULL,
+    LABEL_SECTIONS,
+    RECALLS,
+    RECALLS_FULL,
+)
 from backend.llm.intent_classifier import LOW_CONFIDENCE_THRESHOLD
+from backend.models.base import BaseSchema
 from backend.models.classification import IntentClassificationResult
 from backend.models.enums import InvestigateStatus, ProfileType, SafetyCategory
 from backend.models.report import EarlyOutcome, Redirect
@@ -93,3 +101,47 @@ def drug_count_outcome(drugs: list[str], profile: ProfileType) -> EarlyOutcome |
             redirect=Redirect(to="prescription_check", drugs=list(drugs)),
         )
     return EarlyOutcome(status=InvestigateStatus.ONE_AT_A_TIME, message=ONE_AT_A_TIME_MESSAGE)
+
+
+# --- v2 intent to sources (PROJECT.md Section 6) ---
+
+class IntentSources(BaseSchema):
+    label_sections: list[str]  # empty: no label call
+    faers_top_reactions: int | None  # None: no FAERS
+    recalls: int | None  # None: no recalls; else newest N per ingredient
+
+
+SOURCES_BY_PROFILE: dict[ProfileType, IntentSources] = {
+    ProfileType.FULL_INVESTIGATION: IntentSources(
+        label_sections=list(LABEL_SECTIONS),
+        faers_top_reactions=FAERS_TOP_REACTIONS_FULL, recalls=RECALLS_FULL),
+    ProfileType.WARNINGS_REVIEW: IntentSources(
+        label_sections=["boxed_warning", "warnings"], faers_top_reactions=None, recalls=None),
+    ProfileType.CONTRAINDICATIONS_REVIEW: IntentSources(
+        label_sections=["contraindications", "boxed_warning"], faers_top_reactions=None, recalls=None),
+    ProfileType.INTERACTION_INVESTIGATION: IntentSources(
+        label_sections=["drug_interactions"], faers_top_reactions=None, recalls=None),
+    ProfileType.ADVERSE_EVENT_INVESTIGATION: IntentSources(
+        label_sections=[], faers_top_reactions=FAERS_TOP_REACTIONS, recalls=None),
+    ProfileType.RECALL_INVESTIGATION: IntentSources(
+        label_sections=[], faers_top_reactions=None, recalls=RECALLS),
+}
+
+# Response `intent` and synthesizer INTENT values.
+INTENT_NAMES: dict[ProfileType, str] = {
+    ProfileType.FULL_INVESTIGATION: "full",
+    ProfileType.WARNINGS_REVIEW: "warnings",
+    ProfileType.CONTRAINDICATIONS_REVIEW: "contraindications",
+    ProfileType.INTERACTION_INVESTIGATION: "interactions",
+    ProfileType.ADVERSE_EVENT_INVESTIGATION: "adverse_events",
+    ProfileType.RECALL_INVESTIGATION: "recalls",
+}
+
+
+def final_status(claims_kept: int, claims_cut: int, gaps: list[str]) -> InvestigateStatus:
+    """Section 8 status rules: none kept -> INSUFFICIENT_EVIDENCE; any cut or gap -> PARTIAL."""
+    if claims_kept == 0:
+        return InvestigateStatus.INSUFFICIENT_EVIDENCE
+    if claims_cut or gaps:
+        return InvestigateStatus.PARTIAL
+    return InvestigateStatus.ANSWERED
