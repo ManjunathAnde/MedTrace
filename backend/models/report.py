@@ -46,6 +46,15 @@ class ResponseClaim(BaseSchema):
     quote: str
 
 
+class RemovedClaim(BaseSchema):
+    """A claim the verifier cut, shown under "Removed by verifier (N)" (Section 11)."""
+    text: str
+    evidence_id: str
+    quote: str
+    verdict: Literal["CUT_QUOTE", "CUT_SUPPORT", "CUT_DIRECTIVE", "CUT_BAD_ID"]
+    reason: str
+
+
 class ResponseMeta(BaseSchema):
     latency_ms: int
     llm_calls: int
@@ -66,6 +75,7 @@ class InvestigateResponse(BaseSchema):
     claims: list[ResponseClaim] = []
     claims_total: int = 0
     claims_kept: int = 0
+    removed: list[RemovedClaim] = []  # claims the verifier cut, with verdict and reason
     gaps: list[str] = []
     evidence: dict[str, EvidenceItem] = {}  # only items cited by kept claims
     meta: ResponseMeta
@@ -89,11 +99,14 @@ class InteractionCard(BaseSchema):
     severity: Literal["High", "Moderate", "Info"]
     severity_rule: str
     claims: list[ResponseClaim]
+    removed: list[RemovedClaim] = []
 
 
 class NeedsReview(BaseSchema):
     pair: tuple[str, str]
-    evidence_ids: list[str]
+    evidence_ids: list[str]  # the matched passages
+    reason: str  # agent failed, or mentioned but not verified
+    removed: list[RemovedClaim] = []
 
 
 class RecallRef(BaseSchema):
@@ -120,6 +133,7 @@ class PrescriptionCheckResponse(BaseSchema):
     needs_review: list[NeedsReview] = []
     no_documented_interaction: list[tuple[str, str]] = []
     recalls: list[RecallRef] = []
+    gaps: list[str] = []  # sources that could not be retrieved
     evidence: dict[str, EvidenceItem] = {}  # every item referenced
     footer: str = "Class-level interactions were not checked."
     meta: PrescriptionCheckMeta

@@ -1,7 +1,8 @@
-"""/investigate wiring (PROJECT.md §4, §6, §8, §10): status rule, intent sources, RxNorm outage."""
+"""/investigate and /prescription-check wiring (PROJECT.md §4, §6, §8, §10): status rule, intent sources, RxNorm outage."""
 
 from fastapi.testclient import TestClient
 
+import backend.core.prescription_check as prescription_check
 import backend.main as main
 from backend.apis.rxnorm import RxNormServiceError
 from backend.core.router import INTENT_NAMES, SOURCES_BY_PROFILE, final_status
@@ -86,5 +87,21 @@ def test_rxnorm_outage_returns_5xx(monkeypatch):
     monkeypatch.setattr(main, "synthesize_claims", must_not_run)
 
     response = TestClient(main.app).post("/investigate", json={"query": "What are the boxed warnings for warfarin?"})
+    assert response.status_code == 503
+    assert response.json()["error"] == "rxnorm_unavailable"
+
+
+def test_prescription_check_rxnorm_outage_returns_5xx(monkeypatch):
+    async def rxnorm_down(name):
+        raise RxNormServiceError("RxNorm returned HTTP 503")
+
+    async def must_not_run(*args, **kwargs):
+        raise AssertionError("no retrieval or LLM call after an RxNorm outage")
+
+    monkeypatch.setattr(prescription_check, "fetch_drug_identity", rxnorm_down)
+    monkeypatch.setattr(prescription_check, "fetch_label_evidence", must_not_run)
+    monkeypatch.setattr(main, "evaluate_pair", must_not_run)
+
+    response = TestClient(main.app).post("/prescription-check", json={"drugs": ["tizanidine", "ciprofloxacin"]})
     assert response.status_code == 503
     assert response.json()["error"] == "rxnorm_unavailable"

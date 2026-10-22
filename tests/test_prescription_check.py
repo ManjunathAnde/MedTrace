@@ -1,15 +1,20 @@
 """Prescription Check pure parts (PROJECT.md §9, §14 CP5): input, candidate search, severity, cache key."""
 
+from types import SimpleNamespace
+
 import pytest
 
 from backend.cache.report_cache import build_prescription_cache_key
 from backend.core.prescription_check import (
     FOOTER,
+    combined_provider,
     find_pair_candidates,
     input_outcome,
     match_names,
+    pair_card,
     parse_drug_list,
     severity_for,
+    sort_by_severity,
 )
 from backend.models.evidence import DrugIdentity, EvidenceItem
 
@@ -143,4 +148,45 @@ def test_highest_wins_and_first_passage_at_that_level_is_shown():
 
 def test_prescription_cache_key_is_order_independent_and_versioned():
     assert build_prescription_cache_key(["2551", "35636"]) == build_prescription_cache_key(["35636", "2551"])
-    assert build_prescription_cache_key(["35636", "2551"]) == "v3:prescription_check:2551,35636"
+    assert build_prescription_cache_key(["35636", "2551"]) == "v4:prescription_check:2551,35636"
+
+
+# --- 9.6 after verification, one test per row ---
+
+def test_documented_with_kept_claims_is_a_card_with_severity():
+    cited = [_passage("Concomitant use is contraindicated.", section="contraindications", id="E28")]
+    assert pair_card("INTERACTION_DOCUMENTED", cited) == ("High", "section contraindications (E28)")
+
+
+def test_documented_with_no_kept_claims_needs_review():
+    assert pair_card("INTERACTION_DOCUMENTED", []) is None
+
+
+def test_no_interaction_stated_with_kept_claims_is_an_info_card():
+    assert pair_card("NO_INTERACTION_STATED", [_passage("No clinically important effect.")]) == (
+        "Info", "Label states no clinically significant interaction")
+
+
+def test_no_interaction_stated_with_no_kept_claims_needs_review():
+    assert pair_card("NO_INTERACTION_STATED", []) is None
+
+
+@pytest.mark.parametrize("cited", [[], [_passage("Avoid use.")]])
+def test_unclear_or_no_finding_needs_review(cited):
+    assert pair_card("UNCLEAR", cited) is None
+    assert pair_card(None, cited) is None
+
+
+def test_cards_sorted_high_moderate_info_stable():
+    cards = [SimpleNamespace(severity=s, n=n) for n, s in
+             enumerate(["Info", "High", "Moderate", "High", "Info"])]
+    assert [(c.severity, c.n) for c in sort_by_severity(cards)] == [
+        ("High", 1), ("High", 3), ("Moderate", 2), ("Info", 0), ("Info", 4)]
+
+
+@pytest.mark.parametrize("providers,expected", [
+    (["gemini", "gemini"], "gemini"), (["gemini", "groq"], "groq"), ([None, "gemini"], "gemini"),
+    ([None], None), ([], None),
+])
+def test_combined_verifier_provider(providers, expected):
+    assert combined_provider(providers) == expected

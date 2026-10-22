@@ -356,12 +356,16 @@ async def check_investigate(query: str, expect, pause_s: int = _SHORT_REQUEST_PA
 
 
 def _answered_with_cited_claims(body: dict, data_calls) -> bool:
-    """CP4: claims are verified; only kept claims are returned; cut count printed."""
+    """CP4: claims are verified; only kept claims are returned; every cut claim is in `removed` (printed)."""
     claims, meta = body["claims"], body["meta"]
     cut = body["claims_total"] - body["claims_kept"]
     print(f"verifier: kept {body['claims_kept']}, cut {cut}, provider {meta['verifier_provider']}")
+    for c in body["removed"]:
+        print(f"  {c['verdict']} [{c['evidence_id']}] {c['text']}\n      quote: {c['quote']!r}\n"
+              f"      reason: {c['reason']}")
     expected_status = "PARTIAL" if cut or body["gaps"] else "ANSWERED"
     return (body["status"] == expected_status and claims and len(claims) == body["claims_kept"]
+            and len(body["removed"]) == cut
             and all(c["evidence_id"] in body["evidence"] for c in claims)
             and meta["verified"] is True and meta["verifier_provider"] in ("gemini", "groq")
             and body["drug"]["label"] is not None)
@@ -687,6 +691,88 @@ async def check_agent_unavailable_with_invalid_keys() -> bool:
     return finding is None
 
 
+# --- CP5 POST /prescription-check end to end (in-process ASGI, real APIs and LLMs, cache disabled) ---
+
+_FOOTER = "Class-level interactions were not checked."
+
+
+async def _post_prescription_check(drugs: list[str]) -> tuple[int, dict]:
+    os.environ["UPSTASH_REDIS_REST_URL"] = ""  # cache disabled for smoke (read at import)
+    os.environ["UPSTASH_REDIS_REST_TOKEN"] = ""
+    import httpx
+
+    from backend.main import app
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                 base_url="http://medtrace.local", timeout=900) as client:
+        response = await client.post("/prescription-check", json={"drugs": drugs})
+    return response.status_code, response.json()
+
+
+def _print_prescription_check(code: int, body: dict) -> None:
+    print(json.dumps({
+        "http": code, "status": body.get("status"), "message": body.get("message"),
+        "resolution": [(r["input_name"], r["status"], r.get("preferred_name"),
+                        (r.get("label") or {}).get("title"), r.get("message"))
+                       for r in body.get("resolution", [])],
+        "no_documented_interaction": body.get("no_documented_interaction"),
+        "needs_review": [(n["pair"], n["reason"], n["evidence_ids"]) for n in body.get("needs_review", [])],
+        "recalls": len(body.get("recalls", [])), "gaps": body.get("gaps"),
+        "evidence_ids": sorted(body.get("evidence", {}), key=lambda i: int(i[1:])),
+        "footer": body.get("footer"), "meta": body.get("meta"),
+    }, indent=2))
+    for card in body.get("interactions", []):
+        print(f"  CARD {card['pair']} {card['finding']} severity={card['severity']} rule={card['severity_rule']!r}")
+        for c in card["claims"]:
+            print(f"    KEPT [{c['evidence_id']} {c['section']}] {c['text']}\n         quote: {c['quote']!r}")
+        for c in card["removed"]:
+            print(f"    {c['verdict']} [{c['evidence_id']}] {c['text']}\n         quote: {c['quote']!r}"
+                  f"\n         reason: {c['reason']}")
+    for review in body.get("needs_review", []):
+        for c in review["removed"]:
+            print(f"  NEEDS_REVIEW {review['pair']} {c['verdict']} [{c['evidence_id']}] {c['text']!r} "
+                  f"reason: {c['reason']}")
+
+
+async def check_prescription_endpoint(drugs: list[str], expect, pause_s: int = _SHORT_REQUEST_PAUSE_S) -> bool:
+    await asyncio.sleep(pause_s)
+    code, body = await _post_prescription_check(drugs)
+    _print_prescription_check(code, body)
+    return code == 200 and body["footer"] == _FOOTER and expect(body)
+
+
+def _cited_ids_present(body: dict) -> bool:
+    cited = {c["evidence_id"] for card in body["interactions"] for c in card["claims"]}
+    cited |= {i for n in body["needs_review"] for i in n["evidence_ids"]}
+    cited |= {r["evidence_id"] for r in body["recalls"]}
+    return cited <= set(body["evidence"])
+
+
+def _tizanidine_ciprofloxacin_high(body: dict) -> bool:
+    cards = body["interactions"]
+    return (body["status"] == "COMPLETE" and len(cards) == 1 and cards[0]["severity"] == "High"
+            and cards[0]["finding"] == "INTERACTION_DOCUMENTED" and cards[0]["claims"]
+            and body["meta"]["verified"] is True and body["meta"]["verifier_provider"] in ("gemini", "groq")
+            and body["meta"]["pairs_with_candidates"] == 1 and _cited_ids_present(body))
+
+
+def _pantoprazole_clopidogrel_info_or_review(body: dict) -> bool:
+    cards = body["interactions"]
+    info_card = len(cards) == 1 and cards[0]["finding"] == "NO_INTERACTION_STATED" and cards[0]["severity"] == "Info"
+    return body["status"] == "COMPLETE" and (info_card or len(body["needs_review"]) == 1) and _cited_ids_present(body)
+
+
+async def check_prescription_endpoint_invalid_keys() -> bool:
+    """Agent fails on both providers -> needs review with the fixed reason, not verified, still COMPLETE."""
+    await asyncio.sleep(_SHORT_REQUEST_PAUSE_S)
+    with _InvalidKeys("GOOGLE_API_KEY", "GROQ_API_KEY"):
+        code, body = await _post_prescription_check(["tizanidine", "ciprofloxacin"])
+    _print_prescription_check(code, body)
+    return (code == 200 and body["status"] == "COMPLETE" and not body["interactions"]
+            and [n["reason"] for n in body["needs_review"]] == ["could not be evaluated automatically."]
+            and body["meta"]["verified"] is False and _cited_ids_present(body))
+
+
 CHECKS = [
     ("cp1 rxnorm: 'omeprazole' -> omeprazole, not esomeprazole",
      lambda: check_rxnorm_resolves("omeprazole", "7646", "omeprazole")),
@@ -799,6 +885,38 @@ CHECKS = [
      check_agent_no_interaction_stated),
     ("cp5 agent: invalid LLM keys -> no finding (needs review), no exception",
      check_agent_unavailable_with_invalid_keys),
+    ("cp5 /prescription-check: tizanidine + ciprofloxacin -> COMPLETE, one High card, verified claims, removed listed",
+     lambda: check_prescription_endpoint(["tizanidine", "ciprofloxacin"], _tizanidine_ciprofloxacin_high,
+                                         _FULL_REQUEST_PAUSE_S)),
+    ("cp5 /prescription-check: amoxicillin + levothyroxine -> no_documented_interaction, 0 LLM calls",
+     lambda: check_prescription_endpoint(
+         ["amoxicillin", "levothyroxine"],
+         lambda b: b["status"] == "COMPLETE" and b["no_documented_interaction"] == [["amoxicillin", "levothyroxine"]]
+         and b["meta"]["llm_calls"] == 0 and not b["interactions"] and not b["needs_review"])),
+    ("cp5 /prescription-check: pantoprazole + clopidogrel -> Info card (or needs review if all claims cut)",
+     lambda: check_prescription_endpoint(["pantoprazole", "clopidogrel"], _pantoprazole_clopidogrel_info_or_review,
+                                         _FULL_REQUEST_PAUSE_S)),
+    ("cp5 /prescription-check: 6 drugs -> TOO_MANY, no resolution",
+     lambda: check_prescription_endpoint(
+         ["warfarin", "aspirin", "metformin", "lisinopril", "amlodipine", "omeprazole"],
+         lambda b: b["status"] == "TOO_MANY" and not b["resolution"]
+         and b["message"] == "Prescription Check takes at most 5 medications.")),
+    ("cp5 /prescription-check: warfarin + Zorvaxitran -> TOO_FEW, Zorvaxitran listed",
+     lambda: check_prescription_endpoint(
+         ["warfarin", "Zorvaxitran"],
+         lambda b: b["status"] == "TOO_FEW"
+         and b["message"] == "Add at least two recognized medications to run a check."
+         and [r["status"] for r in b["resolution"]] == ["RESOLVED", "NOT_RECOGNIZED"])),
+    ("cp5 /prescription-check: warfarin, Zorvaxitran, aspirin -> COMPLETE, Zorvaxitran NOT_RECOGNIZED",
+     lambda: check_prescription_endpoint(
+         ["warfarin", "Zorvaxitran", "aspirin"],
+         lambda b: b["status"] == "COMPLETE"
+         and [r["status"] for r in b["resolution"]] == ["RESOLVED", "NOT_RECOGNIZED", "RESOLVED"]
+         and b["resolution"][1]["message"] == "'Zorvaxitran' wasn't recognized. Check the spelling and try again."
+         and b["meta"]["pairs_checked"] == 1 and _cited_ids_present(b),
+         _FULL_REQUEST_PAUSE_S)),
+    ("cp5 /prescription-check: invalid LLM keys -> needs review 'could not be evaluated automatically.', verified false",
+     check_prescription_endpoint_invalid_keys),
 ]
 
 

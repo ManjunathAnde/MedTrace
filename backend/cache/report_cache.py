@@ -8,8 +8,9 @@ from backend.models.report import InvestigateResponse, PrescriptionCheckResponse
 
 logger = logging.getLogger(__name__)
 
-# v1 entries use "v2:"; v2 reads and writes only "v3:" in the same Upstash instance.
-CACHE_VERSION = "v3"
+# v1 entries use "v2:"; v2 reads and writes only "v4:" in the same Upstash instance.
+# v4 (2026-10-21): responses carry verifier-cut claims (`removed`); no v3 entry lacking them is read.
+CACHE_VERSION = "v4"
 
 # Only these are cached (PROJECT.md Section 6), and only once verified (CP4).
 CACHEABLE_STATUSES = {InvestigateStatus.ANSWERED, InvestigateStatus.PARTIAL}

@@ -6,10 +6,12 @@ Prescription Check, deterministic parts (PROJECT.md Section 9).
   9.3 evidence          gather_product_evidence (4 interaction-relevant sections),
                         number_evidence (E-IDs unique across the request)
   9.4 candidate search  match_names, find_pair_candidates (pure; no hit -> no LLM)
+  9.6 after verifying   pair_card, sort_by_severity, combined_provider (pure)
   9.7 severity          severity_for (pure; highest wins, rule recorded)
   9.8 recalls           gather_recall_evidence (per unique ingredient)
 
-The interaction agent, verifier, and response assembly come later in CP5.
+The endpoint (backend/main.py) runs the interaction agent and the verifier
+between these steps.
 DailyMed and recalls degrade (a failure becomes a gap); an RxNorm outage
 propagates as RxNormServiceError so the endpoint fails loud.
 """
@@ -257,6 +259,42 @@ def severity_for(cited: list[EvidenceItem]) -> tuple[Severity, str]:
         if _RANK[severity] > _RANK[best[0]]:
             best = (severity, f"{rule} ({item.id})")
     return best
+
+
+# --- 9.6 after verification (pure) ---
+
+NO_INTERACTION_STATED_RULE = "Label states no clinically significant interaction"
+NEEDS_REVIEW_UNVERIFIED = "Mentioned in a label; could not be verified automatically."
+
+
+def pair_card(finding: str | None, cited: list[EvidenceItem]) -> tuple[Severity, str] | None:
+    """
+    Section 9.6: (severity, rule) when the pair is shown as a card, None when it
+    goes to needs_review. `cited` = passages cited by the kept claims.
+      INTERACTION_DOCUMENTED, 1+ kept -> card, Section 9.7 severity
+      NO_INTERACTION_STATED,  1+ kept -> Info card
+      0 kept, UNCLEAR, or no finding  -> needs_review (NO_INTERACTION_STATED
+                                         with 0 kept too: owner, 2026-10-21)
+    """
+    if not cited:
+        return None
+    if finding == "INTERACTION_DOCUMENTED":
+        return severity_for(cited)
+    if finding == "NO_INTERACTION_STATED":
+        return "Info", NO_INTERACTION_STATED_RULE
+    return None
+
+
+def sort_by_severity(cards: list) -> list:
+    """Cards High, Moderate, Info; input order kept within a level."""
+    return sorted(cards, key=lambda card: -_RANK[card.severity])
+
+
+def combined_provider(providers: list[str | None]) -> str | None:
+    """meta.verifier_provider over several calls: "groq" if any fell back, else "gemini", else None."""
+    if "groq" in providers:
+        return "groq"
+    return "gemini" if "gemini" in providers else None
 
 
 # --- 9.8 recalls ---
