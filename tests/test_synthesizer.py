@@ -61,6 +61,16 @@ def test_prompt_has_claim_cap_rule():
     )
 
 
+def test_prompt_has_scope_qualifier_rule_with_made_up_example():
+    prompt = build_synthesizer_prompt(_input())
+    assert ("12. When a passage limits a finding to a species, population, dose, exposure level, or duration, "
+            "keep that limit in the claim's wording.") in prompt
+    assert 'not "Drug X caused liver tumors".' in prompt
+    # The example must not echo a benchmark answer (bw-03 is Ozempic's rodent thyroid tumors).
+    rule_12 = prompt[prompt.index("12. When a passage"):].split("\n", 1)[0].lower()
+    assert "thyroid" not in rule_12 and "semaglutide" not in rule_12 and "ozempic" not in rule_12
+
+
 def test_both_providers_failing_gives_insufficient_evidence(monkeypatch):
     async def fail(*args, **kwargs):
         raise ProvidersUnavailableError("gemini: 429; groq: 401")

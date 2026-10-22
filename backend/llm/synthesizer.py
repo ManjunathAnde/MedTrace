@@ -27,7 +27,9 @@ SYNTHESIS_FAILED_GAP = "The answer could not be generated. Please try again."
 NO_EVIDENCE_GAP = "No FDA evidence was retrieved for this question."
 
 # PROJECT.md Section 12.3, verbatim, plus rule 11 (owner, 2026-10-21: keeps the
-# answer inside the synthesizer's output-token budget).
+# answer inside the synthesizer's output-token budget) and rule 12 (owner,
+# 2026-10-22: Groq dropped exposure limits and the verifier cut the claims). The
+# rule 12 example is made up on purpose: no benchmark question matches it.
 _SYNTHESIZER_PROMPT = """\
 You answer medication questions using ONLY the evidence passages provided. You have no other knowledge. If something is not in the passages, you do not know it.
 
@@ -43,6 +45,7 @@ RULES
 9. If part of the question is not covered by the passages, add a short description of that part to "gaps". Do not guess.
 10. If no claims can be supported, return status "INSUFFICIENT_EVIDENCE" with an empty claims list.
 11. Write at most 8 claims. Prioritize boxed warning and contraindications.
+12. When a passage limits a finding to a species, population, dose, exposure level, or duration, keep that limit in the claim's wording. Example: passage "In rats, Drug X caused liver tumors at exposures 10 times the maximum human dose after 2 years" -> claim "In rats, Drug X caused liver tumors at exposures 10 times the maximum human dose after 2 years", not "Drug X caused liver tumors".
 
 Order claims: boxed warning, indications, contraindications, warnings, interactions, dosage, adverse event reports, recalls.
 
