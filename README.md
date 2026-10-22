@@ -1,288 +1,191 @@
-# 💊 MedTrace
-### AI-Powered Medication Intelligence Platform
+#📑 MedTrace
 
-🔗 **[Live link ](https://med-trace-liart.vercel.app/)** | **[GitHub](https://github.com/ManjunathAnde/MedTrace)** | **[LinkedIn](https://www.linkedin.com/in/manjunath-ande/)**
----
-MedTrace is an AI-assisted medication investigation platform that combines deterministic medical evidence retrieval with structured LLM reasoning to generate evidence-grounded medication safety reports.
+**AI that proves every answer, built for the highest-stakes case: medication safety.**
 
-Instead of relying on an LLM to "know" medical information, MedTrace retrieves data from trusted public sources such as **RxNorm, DailyMed, and OpenFDA**, then uses AI only to classify requests and synthesize structured reports.
+[Live app](https://med-trace-liart.vercel.app) | [LinkedIn](https://www.linkedin.com/in/manjunath-ande/)
+
+MedTrace answers medication questions for **pharmacists and clinicians** using only public FDA data. Every claim it shows is checked in code against the exact FDA passage it cites. Claims that fail the check are removed, and the user sees what was removed and why.
+
+> **LLM for judgment. Code for guarantees.**
+> The LLM writes and judges. Deterministic code fetches the data, checks every quote, sets severity and status, and decides what reaches the user. No LLM output reaches the user without a code check behind it.
 
 ---
 
 ## Why MedTrace?
 
-Modern LLMs are excellent at summarizing information but are unreliable as factual sources for healthcare applications.
+LLMs are good at writing fluent answers and bad at proving them. Telling a model "only use FDA sources" is a request, not a guarantee.
 
-MedTrace was built around a different philosophy:
+MedTrace enforces sources instead of asking for them:
 
-> **Authoritative APIs retrieve the facts. AI explains the facts.**
-
-The LLM never generates medication facts from its own training data. It only classifies intent and summarizes evidence that was already retrieved from RxNorm, DailyMed, and OpenFDA. If the evidence retrieval fails or returns nothing, the LLM has nothing to hallucinate from, it just reports incomplete data.
+- Every claim carries an evidence ID, a verbatim quote from the label, a link to the label, and its effective date.
+- A **citation verifier** checks each claim before it's shown.
+- When the verifier can't prove a claim, it cuts it. When in doubt, it fails closed.
 
 ---
 
-## Example Workflow
+## Features
+
+### 1. Ask MedTrace (`POST /investigate`)
+One-drug questions: boxed warnings, contraindications, warnings, dosing, indications.
+
+Returns a list of short claims. Each claim has a source tag that opens the exact label passage with the quote highlighted. The UI shows **"Claims verified: X of Y"** and which label was used.
+
+### 2. Prescription Check (`POST /prescription-check`)
+Takes 2 to 5 medications. For each pair, it:
+
+1. Searches each FDA label in code for the other drug's names (no LLM call if neither label names the other).
+2. If found, runs the interaction agent to write claims from the label text.
+3. Verifies every claim.
+4. Assigns severity (High / Moderate / Info) with code rules, not the LLM.
+5. Lists FDA recalls by ingredient.
+
+
+### 3. Citation Verifier
+The verifier knows nothing about drugs. It only sees claims and passages, and it imports nothing from the drug modules. Swap FDA labels for contracts, regulations, or financial filings and the same verifier works.
+
+| Layer | Type | Check | Cut code |
+| --- | --- | --- | --- |
+| L0 | code | The cited evidence ID exists | `CUT_BAD_ID` |
+| L1 | code | The quote is 5 to 30 words and appears **verbatim** in the cited passage (after normalizing case, quotes, dashes, whitespace) | `CUT_QUOTE` |
+| L2 | LLM | Does the passage support the claim as written? | `CUT_SUPPORT` |
+| L3 | code | No directive language ("you should", "stop taking", ...) | `CUT_DIRECTIVE` |
+
+**L1 is the hard guarantee.** A quote either is in the passage or it isn't, and no model can talk its way past a substring check. L2 is an LLM and can be wrong, which is why removed claims are shown, not hidden.
+
+---
+
+## Architecture
 
 ```text
-User Query
-(accepts a natural-language medication question)
-      │
-      ▼
-Safety Classification
-(blocks unsafe medical advice before processing)
-      │
-      ▼
-Medication Extraction
-(identifies and normalizes the target medication)
-      │
-      ▼
-Intent Classification
-(determines what the user wants to investigate)
-      │
-      ▼
-Profile Routing
-(selects the minimum evidence needed for the request)
-      │
-      ▼
-Evidence Retrieval
-(fetches authoritative data from RxNorm, DailyMed & OpenFDA)
-      │
-      ▼
-AI Risk Analysis
-(synthesizes retrieved evidence into a structured report)
-      │
-      ▼
-Medication Report
-(displays evidence-grounded findings, warnings, recalls & adverse events)
+Browser (Vercel, React)
+   |  POST /investigate  or  POST /prescription-check
+   v
+FastAPI (Render)
+   |-- safety walls, extraction, intent        (LLM helpers + code guards)
+   |-- RxNorm, DailyMed, openFDA, recalls      (deterministic API tools)
+   |-- evidence store                          (code: numbered passages E1..En)
+   |-- synthesizer / interaction agent         (LLM agents: write claims)
+   |-- citation verifier                       (code checks + one LLM support check)
+   |-- severity + status rules                 (code)
+   |-- Upstash Redis cache                     (code)
+   v
+JSON response -> UI cards with source tags
 ```
 
----
+### Agents vs tools
 
-# Key Features
+| Kind | Members | Job |
+| --- | --- | --- |
+| LLM agents | synthesizer, interaction agent, verifier support check | Write claims; judge whether a passage supports a claim |
+| LLM helpers | safety classifier, extractor, intent classifier | Classify and extract |
+| Deterministic tools | RxNorm, DailyMed, openFDA, FAERS, recalls, evidence store, guards, verifier L0/L1/L3, severity rules, status rules, cache | Everything that must be guaranteed |
 
-- Multi-stage AI pipeline instead of a single monolithic prompt
-- Evidence-first architecture using authoritative public medical sources
-- Automatic Gemini → Groq provider failover
-- Deterministic medication identity resolution through RxNorm
-- Retrieval profiles that minimize unnecessary API calls
-- Structured AI-generated medication reports
-- Intelligent 72-hour report caching
-- Responsive React frontend with real-time investigation timeline
+Orchestration is plain async Python. Code decides which sources get called and in what order. The LLM never plans tool calls. **Specialized agents in a controlled pipeline: predictable over autonomous, because it's medication safety.**
 
----
 
-# Architecture
+## Design decisions
 
-```text
-                React Frontend
-                       │
-                 POST /investigate
-                       │
-               FastAPI Backend
-                       │
-        ┌──────────────┴──────────────┐
-        │                             │
- Safety Validation             Medication Extraction
-        │                             │
-        └──────────────┬──────────────┘
-                       │
-             Intent Classification
-                       │
-                 Profile Router
-                       │
-               Report Cache (72h)
-                       │
-                 Cache Hit?
-             ┌─────────┴─────────┐
-             │                   │
-            Yes                 No
-             │                   │
-             │          Evidence Retrieval
-             │         ┌────────┬────────┐
-             │         │        │        │
-             │      RxNorm  DailyMed  OpenFDA
-             │         │        │        │
-             │         └────────┴────────┘
-             │                  │
-             │          MedicationEvidence
-             │                  │
-             └────────► AI Risk Analyst
-                              │
-                     MedicationReport
-```
+**Safety in three walls.** Regex rules catch self-harm and personal-advice phrasing. An LLM classifier handles the rest. Interaction questions about named drugs stay allowed ("Can I take ibuprofen with lisinopril?" is SAFE; "Can I take my wife's lisinopril?" is PERSONAL_ADVICE). The verifier's L3 layer removes any directive language from claims.
 
----
+**Extraction is guarded in code.** The LLM copies drug names exactly as typed. Code keeps a name only if it actually appears in the user's text.
 
-# Design Decisions
+**RxNorm is exact, not fuzzy.** Typos return NOT_RECOGNIZED instead of guessing. RxNorm is a hard dependency: if it's down, the request returns HTTP 503, because a wrong drug identity makes everything after it meaningless.
 
-### Evidence over Hallucination
+**The label used is always shown.** Label selection uses ordered tie-breakers, and the UI shows the chosen label's title, set ID and effective date.
 
-Rather than asking an LLM for medication information directly, MedTrace retrieves evidence from authoritative medical databases first and limits the LLM's responsibility to summarization and reasoning.
+**Severity is code, with negation handling.** High / Moderate / Info come from phrases in the cited passages and from which label section they're in. No-effect statements ("no dose adjustment", "no clinically significant interaction") are masked before matching, so they don't trigger a false signal.
 
----
+**Honest statuses.** Every expected outcome returns HTTP 200 with a `status` field:
 
-### Specialized AI Stages
+| Status | Meaning |
+| --- | --- |
+| `ANSWERED` | All claims kept, no gaps |
+| `PARTIAL` | Some claims cut or gaps reported |
+| `INSUFFICIENT_EVIDENCE` | Nothing survived, or the evidence can't answer the question |
+| `BLOCKED` | Personal advice or self-harm |
+| `UNAVAILABLE` | Both LLM providers failed |
+| `NO_DRUG` / `NOT_RECOGNIZED` | No drug named / RxNorm didn't recognize it |
+| `REDIRECT` / `ONE_AT_A_TIME` | Multi-drug questions in Ask |
+| `COMPLETE` / `TOO_FEW` / `TOO_MANY` | Prescription Check outcomes |
 
-Instead of one large prompt, the system separates responsibilities into independent modules:
+### LLM providers and failover
 
-- Safety Classification
-- Medication Extraction
-- Intent Classification
-- Risk Analysis
+Every LLM call tries **Gemini first, then Groq**. Responses are temperature 0, structured JSON validated against Pydantic schemas, with an explicit token budget per call.
 
-This makes each component easier to validate, debug, and improve independently.
+| Provider | Model |
+| --- | --- |
+| Gemini (first) | `gemini-2.5-flash-lite` |
+| Groq (fallback) | `qwen/qwen3.8-27b` |
 
----
-## ⚡ Intelligent Caching
+Groq retry rules: a per-minute rate limit waits and retries once; a daily limit fails immediately; a 5xx, timeout or connection error waits 2 seconds and retries once. If both providers fail, the status is `UNAVAILABLE`, never `BLOCKED`.
 
-To minimize repeated API calls and LLM inference, MedTrace caches **successful investigation reports** using **Upstash Redis**.
+### Failure strategy
 
-Redis was chosen over an in-memory cache because the backend is hosted on **Render**, whose free-tier instances may spin down after periods of inactivity. Since Redis lives independently of the application process, cached investigations survive cold starts and remain available across deployments.
+| Component | If it fails |
+| --- | --- |
+| RxNorm | Critical: HTTP 503 |
+| DailyMed, openFDA, recalls, FAERS | Degrade: continue and record the gap |
+| Both LLM providers | Status `UNAVAILABLE` |
+| Cache (Upstash Redis) | Never blocks a request; the pipeline just runs |
 
-### Profile-Aware Cache Policy
+### Caching
 
-Instead of assigning every investigation the same lifetime, cache duration is determined by the freshness requirements of the underlying medical data.
+Upstash Redis lives outside the app process, so cached answers survive Render free-tier cold starts.
 
-| Investigation Profile | Cache TTL | Why? |
-| :-------------------- | :-------: | :--- |
-| 🔍 **Full Investigation** | **12 hours** | Includes FDA recall data, which is the most time-sensitive evidence source. |
-| 🚨 **Recall Investigation** | **12 hours** | Recall information is safety-critical and updated more frequently than other datasets. |
-| 📊 **Adverse Event Investigation** | **30 days** | OpenFDA FAERS data is released quarterly, making a 30-day cache well within the source's update cycle. |
-| ⚠️ **Warnings Review** | **30 days** | Drug label warnings rarely change after approval. |
-| ⛔ **Contraindications Review** | **30 days** | Contraindications are part of the approved FDA labeling and change infrequently. |
-| 🔄 **Interaction Investigation** | **30 days** | Uses interaction information derived from drug labels rather than a continuously updated interaction database. |
-
-Caching is treated purely as a **performance optimization**.
-
-If Redis is unavailable, times out, or serialization fails, MedTrace simply performs the full investigation pipeline and returns a fresh report. A cache failure can never prevent an investigation from completing.
-
-## Failover
-The risk analysis stage has explicit failure handling. If Gemini fails (rate limits, timeouts, server errors), the request automatically retries on Groq. If Groq also fails, the module returns a fail-safe report instead of crashing.
- 
-Medication identity resolution through RxNorm is a hard dependency: if RxNorm is unavailable, the request returns an error rather than continuing with an unverified medication. This is intentional. A wrong medication identity makes the rest of the report meaningless, so failing loud here is safer than failing silent.
-
-Other degradation behavior:
-- Unsafe medical advice requests are rejected before any retrieval happens
-- Missing optional evidence sources (DailyMed, OpenFDA) reduce report completeness rather than aborting the investigation
-- Cached investigations skip external calls entirely (see Caching section for limitations on Render's free tier)
+| What | TTL | Stored when |
+| --- | --- | --- |
+| Ask, warnings questions | 30 days | `ANSWERED` or `PARTIAL` |
+| Ask, other questions | 12 hours | `ANSWERED` or `PARTIAL` |
+| Prescription Check | 12 hours | `COMPLETE` |
 
 ---
 
-### Retrieval Profiles
+---
 
-Not every request requires every data source.
+## Tech stack
 
-A profile router determines the minimum evidence required for each request, reducing latency and unnecessary API usage.
-
-Example profiles include:
-
-- Full Investigation
-- Warnings Review
-- Contraindications Review
-- Recall Investigation
-- Adverse Event Investigation
+**Backend:** Python 3.13, FastAPI, Pydantic v2, httpx, async Python
+**Frontend:** React, TypeScript, Vite, Tailwind CSS
+**AI:** Google Gemini, Groq (fallback)
+**Data sources:** RxNorm, DailyMed, openFDA (labels, FAERS, enforcement/recalls)
+**Cache:** Upstash Redis
+**Hosting:** Render (backend), Vercel (frontend)
 
 ---
 
-# Technology Stack
+## Running locally
 
-### Frontend
-
-- React
-- TypeScript
-- Vite
-- Tailwind CSS
-- Axios
-
-### Backend
-
-- FastAPI
-- Python
-- Pydantic
-- AsyncIO
-- HTTPX
-
-### AI
-
-- Google Gemini
-- Groq (automatic fallback)
-
-### Medical Data Sources
-
-- RxNorm
-- DailyMed
-- OpenFDA
-- FDA Enforcement API
-
-### Deployment
-
-- Backend: Render
-- Frontend: Vercel
-
----
-
-# Reliability
-
-MedTrace is designed to degrade gracefully rather than fail completely.
-Examples include:
-
-- Unsafe medical advice requests are rejected before retrieval begins.
-- Medication identity is validated through RxNorm.
-- Missing optional evidence sources reduce completeness rather than aborting the investigation.
-- Automatic provider failover handles transient LLM outages.
-- Cached investigations avoid unnecessary external calls.
-
----
-
-# Trade-offs
-
-Like any engineering system, MedTrace intentionally makes trade-offs.
-
-**Chosen**
-
-- Deterministic retrieval over AI-generated facts
-- Modular AI pipeline over a single prompt
-- Simplicity over distributed infrastructure
-- Fast in-memory caching over persistent cache complexity
-
-
-# Running Locally
+Backend:
 
 ```bash
-git clone <repo>
-
+git clone https://github.com/ManjunathAnde/MedTrace.git
 cd MedTrace
-
 pip install -r requirements.txt
-
 uvicorn backend.main:app --reload
 ```
 
-Required environment variables:
+Environment variables:
 
-```env
+```text
 GOOGLE_API_KEY=
-GROQ_API_KEY=
-
 GEMINI_MODEL=gemini-2.5-flash-lite
-GROQ_MODEL=qwen/qwen3.6-27b
+GROQ_API_KEY=
+GROQ_MODEL=qwen/qwen3.8-27b
+UPSTASH_REDIS_REST_URL=
+UPSTASH_REDIS_REST_TOKEN=
+```
+
+Frontend:
+
+```bash
+cd frontend/MedIntel-FE
+npm install
+npm run dev          # real mode, proxies to localhost:8000
+npm run dev:mocks    # mock mode, saved real responses, no backend needed
 ```
 
 ---
 
-# Future Improvements
+## Disclaimer
 
-- Persistent distributed caching
-- Authentication and user accounts
-- Report history
-- Drug-drug interaction engine
-- Observability and metrics
-- CI/CD pipeline
-
----
-
-# Disclaimer
-
-MedTrace is an educational software engineering project intended to demonstrate system design, AI orchestration, retrieval-augmented generation, and backend architecture.
-
-It is **not** a substitute for professional medical advice or clinical decision-making.
+MedTrace shows FDA drug label information for pharmacists and clinicians. It is not medical advice and is not a substitute for professional clinical judgment.
