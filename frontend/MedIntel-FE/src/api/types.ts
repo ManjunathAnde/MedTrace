@@ -61,7 +61,7 @@ export type InvestigateResponse = {
   version: "v2";
   status: InvestigateStatus;
   message: string | null;
-  block_type: "PERSONAL_ADVICE" | "SELF_HARM_RISK" | null;
+  block_type: "SAFE" | "PERSONAL_ADVICE" | "SELF_HARM_RISK" | null; // backend SafetyCategory; SAFE is never sent
   redirect: { to: string; drugs: string[] } | null;
   intent: string | null;
   drug: {

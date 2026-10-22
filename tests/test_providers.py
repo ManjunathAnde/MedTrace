@@ -1,10 +1,10 @@
-"""Provider call parameters (PROJECT.md §12): pure parts of backend/llm/providers.py."""
+"""Provider call parameters and Groq retry rules (PROJECT.md §12, §8 rule 6): backend/llm/providers.py, network mocked."""
 
 import asyncio
 
 import httpx
 import pytest
-from groq import RateLimitError
+from groq import APIConnectionError, APITimeoutError, BadRequestError, InternalServerError, RateLimitError
 from pydantic import BaseModel
 
 import backend.llm.providers as providers
@@ -17,6 +17,7 @@ from backend.llm.providers import (
     SAFETY_MAX_OUTPUT_TOKENS,
     SYNTHESIZER_MAX_OUTPUT_TOKENS,
     complete_json,
+    groq_daily_limit_hit,
     groq_rate_limit_wait_s,
     groq_request_params,
 )
@@ -119,3 +120,85 @@ def test_groq_429_twice_is_unavailable_after_one_wait(monkeypatch):
     with pytest.raises(ProvidersUnavailableError):
         asyncio.run(complete_json("Say ok.", _Answer, 100))
     assert sleeps == [3.0]
+
+
+# --- Groq daily limit fails at once; 5xx/timeout/connection retry once after 2s (mocked) ---
+
+def _daily_limit_error(kind: str) -> RateLimitError:
+    unit = {"TPD": "tokens per day", "RPD": "requests per day"}[kind]
+    return _rate_limit_error({}, (
+        "Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_test` service tier "
+        f"`on_demand` on {unit} ({kind}): Limit 500000, Used 499800, Requested 1200. "
+        "Please try again in 7m32.4s."))
+
+
+def _server_error(status: int = 500) -> InternalServerError:
+    request = httpx.Request("POST", "https://api.groq.com/openai/v1/chat/completions")
+    return InternalServerError("Internal Server Error", response=httpx.Response(status, request=request), body=None)
+
+
+@pytest.mark.parametrize("kind", ["TPD", "RPD"])
+def test_groq_daily_limit_429_fails_at_once_without_waiting(monkeypatch, kind):
+    sleeps, outcomes = [], [_daily_limit_error(kind)]
+    _mock_providers(monkeypatch, outcomes, sleeps)
+    with pytest.raises(ProvidersUnavailableError):
+        asyncio.run(complete_json("Say ok.", _Answer, 100))
+    assert (sleeps, outcomes) == ([], [])  # one Groq call, no wait
+
+
+def test_daily_limit_detection_ignores_per_minute_429():
+    assert groq_daily_limit_hit(_daily_limit_error("TPD")) == "TPD"
+    assert groq_daily_limit_hit(_daily_limit_error("RPD")) == "RPD"
+    per_minute = "Rate limit reached ... on tokens per minute (TPM): Limit 8000. Please try again in 7.66s."
+    assert groq_daily_limit_hit(_rate_limit_error({}, per_minute)) is None
+
+
+@pytest.mark.parametrize("error", [
+    _server_error(500),
+    _server_error(503),
+    APITimeoutError(request=httpx.Request("POST", "https://api.groq.com")),
+    APIConnectionError(request=httpx.Request("POST", "https://api.groq.com")),
+])
+def test_groq_transient_error_waits_2s_and_retries_once_then_succeeds(monkeypatch, error):
+    sleeps, outcomes = [], [error, '{"word": "ok"}']
+    _mock_providers(monkeypatch, outcomes, sleeps)
+    result, provider = asyncio.run(complete_json("Say ok.", _Answer, 100))
+    assert (result.word, provider, sleeps, outcomes) == ("ok", "groq", [pytest.approx(2.0)], [])
+
+
+def test_groq_500_twice_is_unavailable_after_one_wait(monkeypatch):
+    sleeps, outcomes = [], [_server_error(500), _server_error(500)]
+    _mock_providers(monkeypatch, outcomes, sleeps)
+    with pytest.raises(ProvidersUnavailableError):
+        asyncio.run(complete_json("Say ok.", _Answer, 100))
+    assert (sleeps, outcomes) == ([pytest.approx(2.0)], [])
+
+
+def test_groq_other_4xx_is_not_retried(monkeypatch):
+    request = httpx.Request("POST", "https://api.groq.com/openai/v1/chat/completions")
+    bad_request = BadRequestError("Bad Request", response=httpx.Response(400, request=request), body=None)
+    sleeps, outcomes = [], [bad_request]
+    _mock_providers(monkeypatch, outcomes, sleeps)
+    with pytest.raises(ProvidersUnavailableError):
+        asyncio.run(complete_json("Say ok.", _Answer, 100))
+    assert (sleeps, outcomes) == ([], [])
+
+
+def test_groq_client_has_sdk_retries_off(monkeypatch):
+    created = {}
+
+    class FakeCompletions:
+        async def create(self, **params):
+            message = type("M", (), {"content": '{"word": "ok"}'})
+            return type("R", (), {"choices": [type("C", (), {"message": message})]})
+
+    class FakeAsyncGroq:
+        def __init__(self, **kwargs):
+            created.update(kwargs)
+            self.chat = type("Chat", (), {"completions": FakeCompletions()})
+
+    monkeypatch.setattr(providers, "AsyncGroq", FakeAsyncGroq)
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+    monkeypatch.setenv("GROQ_MODEL", "qwen/qwen3.8-27b")
+    assert asyncio.run(providers._call_groq("Say ok.", _Answer, 100)) == '{"word": "ok"}'
+    assert created["max_retries"] == 0

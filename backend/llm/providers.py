@@ -8,8 +8,9 @@ and call parameters. Every v2 LLM call goes through complete_json.
     then the next provider is tried; an API, network or configuration error
     moves to the next provider straight away
   - Groq: JSON mode, explicit max_tokens under the output-token limit,
-    reasoning_effort only for Qwen models; a 429 waits out the window
-    (retry-after, capped at 65s) and retries Groq once
+    reasoning_effort only for Qwen models; SDK retries off. One retry in our
+    code: a per-minute 429 waits out the window (retry-after, capped at 65s),
+    a 5xx/timeout/connection error waits 2s; a daily-limit 429 fails at once
 
 Keys and models come from the environment at call time (GOOGLE_API_KEY,
 GEMINI_MODEL, GROQ_API_KEY, GROQ_MODEL). Drug-agnostic: the verifier may import it.
@@ -27,7 +28,7 @@ import httpx
 from google import genai
 from google.genai import errors as genai_errors
 from google.genai import types
-from groq import AsyncGroq, GroqError, RateLimitError
+from groq import APIConnectionError, AsyncGroq, GroqError, InternalServerError, RateLimitError
 from pydantic import BaseModel, ValidationError
 
 logger = logging.getLogger(__name__)
@@ -103,7 +104,9 @@ async def _call_gemini(prompt: str, schema: type[BaseModel], max_output_tokens: 
 
 
 async def _call_groq(prompt: str, schema: type[BaseModel], max_output_tokens: int) -> str:
-    client = AsyncGroq(api_key=os.environ["GROQ_API_KEY"])
+    # max_retries=0: the SDK would otherwise retry 429s and 5xx itself, on top of
+    # _call_groq_retrying, and stall one call for minutes.
+    client = AsyncGroq(api_key=os.environ["GROQ_API_KEY"], max_retries=0)
     response = await client.chat.completions.create(
         **groq_request_params(os.environ["GROQ_MODEL"], prompt, schema, max_output_tokens)
     )
@@ -131,23 +134,49 @@ def groq_rate_limit_wait_s(exc: RateLimitError) -> float:
     return min(max(wait, 0.0), _GROQ_RATE_LIMIT_MAX_WAIT_S)
 
 
-async def _call_groq_waiting_on_rate_limit(
+_GROQ_DAILY_LIMIT = re.compile(r"per day \((TPD|RPD)\)")
+_GROQ_TRANSIENT_RETRY_WAIT_S = 2.0
+
+
+def groq_daily_limit_hit(exc: RateLimitError) -> str | None:
+    """'TPD' or 'RPD' when a Groq 429 is a daily limit (message: "... on tokens per day (TPD): ..."), else None."""
+    match = _GROQ_DAILY_LIMIT.search(str(exc))
+    return match.group(1) if match else None
+
+
+async def _call_groq_retrying(
     prompt: str, schema: type[BaseModel], max_output_tokens: int
 ) -> str:
-    # Groq counts requested max_tokens against its per-minute limits (v1 saw
-    # "Requested 1795"), so a fallback right after a full request can hit 429.
-    # Wait out the window once instead of failing the fallback.
+    """
+    One Groq call with at most one retry:
+      - per-minute 429: wait out the window (retry-after or the message hint,
+        capped at 65s). Groq counts requested max_tokens against its per-minute
+        limits (v1 saw "Requested 1795"), so a fallback right after a full
+        request can hit 429.
+      - daily-limit 429 (TPD/RPD): fail at once; waiting cannot help today.
+      - 5xx, timeout, or connection error: wait 2s.
+      - any other error, including other 4xx: fail at once.
+    """
     try:
         return await _call_groq(prompt, schema, max_output_tokens)
     except RateLimitError as exc:
+        daily = groq_daily_limit_hit(exc)
+        if daily:
+            # Never log the message itself: it names the organization.
+            logger.warning("LLM groq daily limit reached (%s); not waiting schema=%s", daily, schema.__name__)
+            raise
         wait = groq_rate_limit_wait_s(exc)
         logger.warning("LLM groq rate limited (429); waiting %.1fs and retrying once schema=%s",
                        wait, schema.__name__)
-        await asyncio.sleep(wait)
-        return await _call_groq(prompt, schema, max_output_tokens)
+    except (InternalServerError, APIConnectionError) as exc:  # APITimeoutError is an APIConnectionError
+        wait = _GROQ_TRANSIENT_RETRY_WAIT_S
+        logger.warning("LLM groq transient error (%s); waiting %.1fs and retrying once schema=%s",
+                       _describe(exc), wait, schema.__name__)
+    await asyncio.sleep(wait)
+    return await _call_groq(prompt, schema, max_output_tokens)
 
 
-_CALLS = {"gemini": _call_gemini, "groq": _call_groq_waiting_on_rate_limit}
+_CALLS = {"gemini": _call_gemini, "groq": _call_groq_retrying}
 
 # Errors that mean "this provider is unavailable now": move to the next one.
 _PROVIDER_ERRORS: dict[Provider, tuple[type[BaseException], ...]] = {
