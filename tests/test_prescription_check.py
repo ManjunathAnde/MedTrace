@@ -190,3 +190,52 @@ def test_cards_sorted_high_moderate_info_stable():
 ])
 def test_combined_verifier_provider(providers, expected):
     assert combined_provider(providers) == expected
+
+
+# --- 9.7 no-effect statements never score as a signal (2026-10-22, live pantoprazole + clopidogrel) ---
+
+# Verbatim passages from today's labels (pantoprazole E27, clopidogrel E49), cited by the 3 kept claims.
+PANTOPRAZOLE_E27 = (
+    "Clopidogrel Clinical Impact: Concomitant administration of pantoprazole and clopidogrel in healthy subjects "
+    "had no clinically important effect on exposure to the active metabolite of clopidogrel or clopidogrel-induced "
+    "platelet inhibition [see Clinical Pharmacology ( 12.3 )] . Intervention: No dose adjustment of clopidogrel is "
+    "necessary when administered with an approved dose of Pantoprazole."
+)
+CLOPIDOGREL_E49 = (
+    "Dexlansoprazole, lansoprazole, and pantoprazole had less effect on the antiplatelet activity of clopidogrel "
+    "than did omeprazole or esomeprazole [see Warnings and Precautions (5.1) and Clinical Pharmacology (12.3) ]. "
+    "7.3 Opioids As with other oral P2Y 12 inhibitors, coadministration of opioid agonists delay and reduce the "
+    "absorption of clopidogrel, presumably because of slowed gastric emptying, resulting in reduced exposure to its "
+    "metabolites [see Clinical Pharmacology ( 12.3 )] ."
+)
+
+
+def test_pantoprazole_clopidogrel_documented_is_info_not_moderate():
+    # claims 1 and 2 cite E27, claim 3 cites E49; the finding stays the agent's (no override)
+    cited = [_passage(PANTOPRAZOLE_E27, id="E27", product="pantoprazole"),
+             _passage(PANTOPRAZOLE_E27, id="E27", product="pantoprazole"),
+             _passage(CLOPIDOGREL_E49, id="E49", product="clopidogrel")]
+    assert severity_for(cited) == ("Info", "no severity signal")
+    assert pair_card("INTERACTION_DOCUMENTED", cited) == ("Info", "no severity signal")
+
+
+@pytest.mark.parametrize("text", [
+    "No dose adjustment of clopidogrel is necessary when administered with an approved dose of Pantoprazole.",
+    "No dose adjustments are needed.",
+    "Coadministration had no clinically significant effect on exposure.",
+    "The change was not clinically relevant.",
+])
+def test_no_effect_statement_alone_has_no_severity_signal(text):
+    assert severity_for([_passage(text)]) == ("Info", "no severity signal")
+
+
+def test_real_signal_next_to_no_effect_statement_still_fires():
+    text = "No dose adjustment of warfarin is necessary. Monitor INR closely."
+    assert severity_for([_passage(text)]) == ("Moderate", "text has 'monitor' (E1)")
+
+
+def test_contraindicated_stays_high_with_no_effect_statement_present():
+    text = "No dose adjustment is necessary for most patients. Concomitant use with tizanidine is contraindicated."
+    assert severity_for([_passage(text)]) == ("High", "text has 'contraindicated' (E1)")
+    assert severity_for([_passage("No dose adjustment is necessary.", section="contraindications")]) == (
+        "High", "section contraindications (E1)")

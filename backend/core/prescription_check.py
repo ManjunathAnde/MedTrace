@@ -235,8 +235,20 @@ _MODERATE_PHRASES = (
 _RANK: dict[Severity, int] = {"High": 2, "Moderate": 1, "Info": 0}
 
 
+# Statements that a combination has no meaningful effect. They are blanked out
+# before the phrase checks so a negation never scores as a signal ("No dose
+# adjustment ... is necessary" would otherwise fire 'adjust'). Any real signal
+# elsewhere in the passage still fires.
+_NO_EFFECT_STATEMENTS = re.compile(
+    r"no dose adjustments?"
+    r"|no clinically (?:important|significant|relevant|meaningful) (?:effects?|interactions?|changes?)"
+    r"|not clinically (?:important|significant|relevant|meaningful)",
+    re.IGNORECASE,
+)
+
+
 def _item_severity(item: EvidenceItem) -> tuple[Severity, str]:
-    text = item.text.lower()
+    text = _NO_EFFECT_STATEMENTS.sub(" ", item.text.lower())
     if item.section in _HIGH_SECTIONS:
         return "High", f"section {item.section}"
     for phrase in _HIGH_PHRASES:
